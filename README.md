@@ -24,25 +24,31 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+API service for Debt Tracker
 
 ## Installation
 
 ```bash
-$ yarn install
+$ yarn
 ```
 
 ## Running the app
 
+Before running the project,
+
+- Create a `.env` file in your root directory, duplicating the [example file](.env.example.txt), filling in custom values.
+- Run existing migrations to sync your database with the latest changes - `yarn migrate`
+- Initialize prisma with `yarn generate`
+
 ```bash
 # development
-$ yarn run start
+$ yarn start
 
 # watch mode
-$ yarn run start:dev
+$ yarn start:dev
 
 # production mode
-$ yarn run start:prod
+$ yarn start:prod
 ```
 
 ## Test
@@ -58,16 +64,27 @@ $ yarn run test:e2e
 $ yarn run test:cov
 ```
 
-## Support
+## Migrations
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Creating Migrations:
 
-## Stay in touch
+- Modify your Prisma schema (`schema.prisma`) to reflect any changes to your data model.
+- Run `npx prisma migrate dev` to create a new migration with a meaningful name.
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Deploying Migrations:
 
-## License
+- Run `yarn migrate` to deploy the latest migration to your database.
 
-Nest is [MIT licensed](LICENSE).
+## Seeding the Database
+
+To seed the database with dummy data, update your `.env` file with the following:
+
+```bash
+TODO: Add seeding data points
+```
+
+Then run the following command:
+
+```bash
+$ yarn seed
+```
