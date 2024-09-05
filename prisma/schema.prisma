@@ -22,5 +22,99 @@ model User {
   email       String    @unique
   phone       String?   @default("") @db.VarChar(50)
   dob         DateTime?
+  createdGroups     Group[]
   supabaseUid String    @unique
+  memberships  Member[]
+  paidTransactions  Transaction[]  @relation("PaidBy")
+  transactionSplits TransactionSplit[]
+  lentLoans         Loan[]         @relation("Lender")
+  borrowedLoans     Loan[]         @relation("Borrower")
+}
+
+model Group {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  description String    @default("")
+  createdByUuid String
+  creator   User      @relation(fields: [createdByUuid], references: [uuid], onDelete: Cascade)  
+  members     Member[]
+  transactions Transaction[]
+  loans Loan[]
+}
+
+model Member {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  joinedAt  DateTime  @default(now())
+  groupUuid   String
+  userUuid  String
+  group     Group     @relation(fields: [groupUuid], references: [uuid], onDelete: Cascade)
+  user      User      @relation(fields: [userUuid], references: [uuid], onDelete: Cascade)
+  
+}
+
+enum Category {
+  BILL
+  EXPENSE
+  LOAN
+}
+
+model Transaction {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  amount      Float
+  description String
+  category    Category
+  date        DateTime
+  groupUuid   String
+  paidByUuid  String
+  group       Group?    @relation(fields: [groupUuid], references: [uuid])
+  payer       User      @relation("PaidBy", fields: [paidByUuid], references: [uuid])
+  splits      TransactionSplit[]
+}
+
+model TransactionSplit {
+  id              Int       @id @default(autoincrement())
+  uuid            String    @unique @default(uuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  transactionUuid String
+  userUuid        String
+  amount          Float
+  isPaid          Boolean
+  paidAt          DateTime?
+  transaction    Transaction  @relation(fields: [transactionUuid], references: [uuid])
+  user            User        @relation(fields: [userUuid], references: [uuid])
+}
+
+
+enum LoanStatus {
+  PENDING
+  ACTIVE
+  REPAID
+  OVERDUE
+}
+
+model Loan {
+  id              Int       @id @default(autoincrement())
+  uuid            String    @unique @default(uuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  groupUuid   String
+  lenderUuid  String
+  borrowerUuid String
+  amount      Float
+  description String
+  dueDate     DateTime?
+  isAcknowledged  Boolean
+  status      LoanStatus
+  group       Group     @relation(fields: [groupUuid], references: [uuid])
+  lender      User      @relation("Lender", fields: [lenderUuid], references: [uuid])
+  borrower    User      @relation("Borrower", fields: [borrowerUuid], references: [uuid])
 }
