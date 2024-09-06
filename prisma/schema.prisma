@@ -14,7 +14,7 @@ datasource db {
 }
 
 enum TransactionCategory {
-  BILL // or recurring expenses? not sure yet about this.
+  BILL 
   EXPENSE
   LOAN
 }
@@ -95,7 +95,7 @@ model GroupMembership {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   role        GroupRole @default(MEMBER)
-  isDeleted   Boolean  @default(false)  // Added field
+  isDeleted   Boolean  @default(false)  
 
   @@id([groupId, userId])
 }
@@ -117,7 +117,7 @@ model Transaction {
   payer       User      @relation("PaidBy", fields: [payerId], references: [id])
  
   splits      TransactionSplit[]
-  isDeleted   Boolean  @default(false)  // Added field
+  isDeleted   Boolean  @default(false)  
 }
 
 model TransactionSplit {
@@ -135,7 +135,7 @@ model TransactionSplit {
   userId        Int
   user          User        @relation(fields: [userId], references: [id])
  
-  isDeleted     Boolean  @default(false)  // Added field
+  isDeleted     Boolean  @default(false)  
 }
 
 model Loan {
@@ -158,7 +158,7 @@ model Loan {
   borrowerId     Int
   borrower       User      @relation("Borrower", fields: [borrowerId], references: [id])
 
-  isDeleted      Boolean  @default(false)  // Added field
+  isDeleted      Boolean  @default(false)  
 }
 
 model Notification {
@@ -173,5 +173,5 @@ model Notification {
   userId    Int
   user      User      @relation(fields: [userId], references: [id])
 
-  isDeleted Boolean  @default(false)  // Added field
+  isDeleted Boolean  @default(false)  
 }
