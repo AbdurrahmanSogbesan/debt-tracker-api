@@ -14,7 +14,7 @@ datasource db {
 }
 
 enum TransactionCategory {
-  BILL 
+  BILL
   EXPENSE
   LOAN
 }
@@ -38,140 +38,138 @@ enum NotificationType {
   BALANCE_UPDATE
 }
 
-
-
 model User {
-  id          Int       @id @default(autoincrement())
-  uuid        String    @unique @default(uuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
-  firstName   String    @default("") 
-  lastName    String    @default("")
-  email       String    @unique
-  phone       String?   @default("") @db.VarChar(50)
-  dob         DateTime? @db.Timestamptz(3)
-  createdGroups     Group[]
-  supabaseUid String    @unique
-  expoPushToken String
-  enableEmailNotifications  Boolean @default(true)
-  enablePushNotifications Boolean @default(true)
- 
-  memberships  GroupMembership[]
-  transactions  Transaction[]  @relation("PaidBy")
+  id                       Int       @id @default(autoincrement())
+  uuid                     String    @unique @default(uuid())
+  createdAt                DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime  @updatedAt @db.Timestamptz(3)
+  firstName                String    @default("")
+  lastName                 String    @default("")
+  email                    String    @unique
+  phone                    String?   @default("") @db.VarChar(50)
+  dob                      DateTime? @db.Timestamptz(3)
+  createdGroups            Group[]
+  supabaseUid              String    @unique
+  expoPushToken            String    @default("")
+  enableEmailNotifications Boolean   @default(true)
+  enablePushNotifications  Boolean   @default(true)
+
+  memberships       GroupMembership[]
+  transactions      Transaction[]      @relation("PaidBy")
   transactionSplits TransactionSplit[]
-  lentLoans         Loan[]         @relation("Lender")
-  borrowedLoans     Loan[]         @relation("Borrower")
+  lentLoans         Loan[]             @relation("Lender")
+  borrowedLoans     Loan[]             @relation("Borrower")
   notifications     Notification[]
-  isDeleted  Boolean  @default(false)  
+  isDeleted         Boolean            @default(false)
 }
 
 model Group {
-  id          Int       @id @default(autoincrement())
-  uuid        String    @unique @default(uuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
-  description String    @default("")
+  id          Int      @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  description String   @default("")
   name        String
-  
-  creatorId   Int
-  creator     User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)  
-  
-  members     GroupMembership[]
+
+  creator   User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId Int
+
+  members      GroupMembership[]
   transactions Transaction[]
-  loans       Loan[]
-  isDeleted   Boolean  @default(false)  
+  loans        Loan[]
+  isDeleted    Boolean           @default(false)
 }
 
 model GroupMembership {
-  uuid        String    @unique @default(uuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
-  joinedAt    DateTime  @default(now()) @db.Timestamptz(3)
-  
-  groupId     Int
-  group       Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  
-  userId      Int
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  role        GroupRole @default(MEMBER)
-  isDeleted   Boolean  @default(false)  
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  joinedAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId Int
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+
+  role      GroupRole @default(MEMBER)
+  isDeleted Boolean   @default(false)
 
   @@id([groupId, userId])
 }
 
 model Transaction {
-  id          Int       @id @default(autoincrement())
-  uuid        String    @unique @default(uuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  id          Int                 @id @default(autoincrement())
+  uuid        String              @unique @default(uuid())
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(3)
   amount      Float
   description String
   category    TransactionCategory
-  date        DateTime  @db.Timestamptz(3)
- 
-  groupId     Int
-  group       Group?    @relation(fields: [groupId], references: [id])
- 
-  payerId     Int
-  payer       User      @relation("PaidBy", fields: [payerId], references: [id])
- 
-  splits      TransactionSplit[]
-  isDeleted   Boolean  @default(false)  
+  date        DateTime            @db.Timestamptz(3)
+
+  group   Group? @relation(fields: [groupId], references: [id])
+  groupId Int
+
+  payer   User @relation("PaidBy", fields: [payerId], references: [id])
+  payerId Int
+
+  splits    TransactionSplit[]
+  isDeleted Boolean            @default(false)
 }
 
 model TransactionSplit {
-  id              Int       @id @default(autoincrement())
-  uuid            String    @unique @default(uuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
-  amount        Float
-  isPaid        Boolean
-  paidAt        DateTime?  @db.Timestamptz(3)
- 
+  id        Int       @id @default(autoincrement())
+  uuid      String    @unique @default(uuid())
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  amount    Float
+  isPaid    Boolean
+  paidAt    DateTime? @db.Timestamptz(3)
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
   transactionId Int
-  transaction   Transaction  @relation(fields: [transactionId], references: [id])
- 
-  userId        Int
-  user          User        @relation(fields: [userId], references: [id])
- 
-  isDeleted     Boolean  @default(false)  
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int
+
+  isDeleted Boolean @default(false)
 }
 
 model Loan {
-  id              Int       @id @default(autoincrement())
-  uuid            String    @unique @default(uuid())
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  id             Int        @id @default(autoincrement())
+  uuid           String     @unique @default(uuid())
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
   amount         Float
   description    String
   dueDate        DateTime?  @db.Timestamptz(3)
   isAcknowledged Boolean
   status         LoanStatus @default(PENDING)
 
-  groupId        Int
-  group          Group     @relation(fields: [groupId], references: [id])
+  group   Group @relation(fields: [groupId], references: [id])
+  groupId Int
 
-  lenderId       Int
-  lender         User      @relation("Lender", fields: [lenderId], references: [id])
+  lender   User @relation("Lender", fields: [lenderId], references: [id])
+  lenderId Int
 
-  borrowerId     Int
-  borrower       User      @relation("Borrower", fields: [borrowerId], references: [id])
+  borrower   User @relation("Borrower", fields: [borrowerId], references: [id])
+  borrowerId Int
 
-  isDeleted      Boolean  @default(false)  
+  isDeleted Boolean @default(false)
 }
 
 model Notification {
-  id        Int       @id @default(autoincrement())
-  uuid      String    @unique @default(uuid())
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  id        Int              @id @default(autoincrement())
+  uuid      String           @unique @default(uuid())
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
   type      NotificationType
   message   String
   isRead    Boolean
 
-  userId    Int
-  user      User      @relation(fields: [userId], references: [id])
+  user   User @relation(fields: [userId], references: [id])
+  userId Int
 
-  isDeleted Boolean  @default(false)  
+  isDeleted Boolean @default(false)
 }
