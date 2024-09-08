@@ -15,7 +15,6 @@ export class UserService {
     try {
       return await this.prisma.user.create({ data });
     } catch (err) {
-      console.log('HERE IS THE ERROR -->', err);
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
@@ -27,8 +26,6 @@ export class UserService {
   }
 
   async findAuthUser(supabaseUid: string) {
-    console.log(supabaseUid);
-
     const user = await this.prisma.user.findUnique({
       where: { supabaseUid },
     });

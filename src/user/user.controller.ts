@@ -28,21 +28,15 @@ export class UserController {
     });
   }
 
+  @Get('me')
+  async findAuthUser(@Request() req) {
+    const { id: supabaseUid } = req.user;
+    return await this.userService.findAuthUser(supabaseUid);
+  }
+
   @Get(':email')
   async findOne(@Param('email') email: string) {
     return await this.userService.findOne(email);
-  }
-
-  @Get('me')
-  async findAuthUser(@Request() req) {
-    console.log('HERE');
-
-    console.log(req.user);
-    const { id: supabaseUid } = req.user;
-
-    console.log(supabaseUid);
-
-    return await this.userService.findAuthUser(supabaseUid);
   }
 
   @Patch(':id')
