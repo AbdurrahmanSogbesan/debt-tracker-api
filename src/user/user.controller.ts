@@ -19,24 +19,30 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  create(@Body() createUserDto: Prisma.UserCreateInput, @Request() req) {
+  async create(@Body() createUserDto: Prisma.UserCreateInput, @Request() req) {
     const { email, id: supabaseUid } = req.user || {};
-
-    return this.userService.create({
+    return await this.userService.create({
       email,
       supabaseUid,
       ...createUserDto,
     });
   }
 
-  @Get()
-  findAll() {
-    return this.userService.findAll();
+  @Get(':email')
+  async findOne(@Param('email') email: string) {
+    return await this.userService.findOne(email);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
+  @Get('me')
+  async findAuthUser(@Request() req) {
+    console.log('HERE');
+
+    console.log(req.user);
+    const { id: supabaseUid } = req.user;
+
+    console.log(supabaseUid);
+
+    return await this.userService.findAuthUser(supabaseUid);
   }
 
   @Patch(':id')

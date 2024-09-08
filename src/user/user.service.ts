@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -6,14 +11,38 @@ import { Prisma } from '@prisma/client';
 export class UserService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: Prisma.UserCreateInput) {
-    return this.prisma.user.create({ data });
+  async create(data: Prisma.UserCreateInput) {
+    try {
+      return await this.prisma.user.create({ data });
+    } catch (err) {
+      console.log('HERE IS THE ERROR -->', err);
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ForbiddenException('Credentials taken!');
+      }
+      throw new Error(err);
+    }
   }
 
-  findAll() {}
+  async findAuthUser(supabaseUid: string) {
+    console.log(supabaseUid);
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+    const user = await this.prisma.user.findUnique({
+      where: { supabaseUid },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
+  }
+
+  async findOne(email: string) {
+    return await this.prisma.user.findUniqueOrThrow({
+      where: { email },
+    });
   }
 
   update(id: number) {
