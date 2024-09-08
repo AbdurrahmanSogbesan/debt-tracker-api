@@ -39,16 +39,15 @@ export class UserController {
     return await this.userService.findOne(email);
   }
 
-  @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateUserDto: Prisma.UserUpdateInput,
-  ) {
-    // return this.userService.update(+id, updateUserDto);
+  @Patch('me')
+  async update(@Body() data: Prisma.UserUpdateInput, @Request() req) {
+    const { id: supabaseUid } = req.user;
+    return await this.userService.update(supabaseUid, data);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+  @Patch('delete')
+  async delete(@Request() req) {
+    const { id: supabaseUid } = req.user;
+    return await this.userService.delete(supabaseUid)
   }
 }

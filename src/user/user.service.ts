@@ -30,23 +30,39 @@ export class UserService {
       where: { supabaseUid },
     });
 
-    if (!user) {
+    if (!user || user.isDeleted) {
       throw new NotFoundException('User not found');
     }
     return user;
   }
 
   async findOne(email: string) {
-    return await this.prisma.user.findUniqueOrThrow({
+    const user = await this.prisma.user.findUnique({
       where: { email },
     });
+
+    if (!user || user.isDeleted) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
   }
 
-  update(id: number) {
-    return `This action updates a #${id} user`;
+  async update(supabaseUid: string, data: Prisma.UserUpdateInput) {
+    const user = await this.prisma.user.update({
+      where: { supabaseUid },
+      data,
+    });
+    return user;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async delete(supabaseUid: string) {
+    const user = await this.prisma.user.update({
+      where: { supabaseUid },
+      data: {
+        isDeleted: true,
+      },
+    });
+    return user;
   }
 }
