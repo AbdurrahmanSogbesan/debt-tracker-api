@@ -10,8 +10,6 @@ import {
   Request,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { Prisma } from '@prisma/client';
 import { JwtGuard } from '../auth/guard';
 
@@ -22,8 +20,6 @@ export class UserController {
 
   @Post()
   create(@Body() createUserDto: Prisma.UserCreateInput, @Request() req) {
-    console.log('USER CONTROLLER');
-
     const { email, id: supabaseUid } = req.user || {};
 
     return this.userService.create({
@@ -48,7 +44,7 @@ export class UserController {
     @Param('id') id: string,
     @Body() updateUserDto: Prisma.UserUpdateInput,
   ) {
-    return this.userService.update(+id, updateUserDto);
+    // return this.userService.update(+id, updateUserDto);
   }
 
   @Delete(':id')

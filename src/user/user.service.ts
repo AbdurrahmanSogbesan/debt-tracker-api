@@ -1,6 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -9,8 +7,6 @@ export class UserService {
   constructor(private prisma: PrismaService) {}
 
   create(data: Prisma.UserCreateInput) {
-    console.log('MADE IT HERE TOO');
-
     return this.prisma.user.create({ data });
   }
 
@@ -20,7 +16,7 @@ export class UserService {
     return `This action returns a #${id} user`;
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
+  update(id: number) {
     return `This action updates a #${id} user`;
   }
 
