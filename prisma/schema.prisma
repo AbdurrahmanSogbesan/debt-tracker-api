@@ -168,8 +168,6 @@ model Notification {
   message   String
   isRead    Boolean
 
-  user   User @relation(fields: [userId], references: [id])
-  userId Int
-
+  users     User[]
   isDeleted Boolean @default(false)
 }
