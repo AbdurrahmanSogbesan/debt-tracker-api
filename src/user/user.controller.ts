@@ -48,6 +48,6 @@ export class UserController {
   @Patch('delete')
   async delete(@Request() req) {
     const { id: supabaseUid } = req.user;
-    return await this.userService.delete(supabaseUid)
+    return await this.userService.delete(supabaseUid);
   }
 }
