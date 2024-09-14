@@ -18,7 +18,7 @@ export class GroupController {
   constructor(private readonly groupService: GroupService) {}
   @Post()
   async create(@Body() data: Prisma.GroupCreateInput, @Request() req) {
-    const { id: supabaseUid, email } = req.user || {};
+    const { id: supabaseUid } = req.user || {};
 
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
