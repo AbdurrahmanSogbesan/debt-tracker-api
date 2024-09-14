@@ -9,7 +9,7 @@ import {
   Patch,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
-import { JwtGuard } from '../../auth/guard';
+import { JwtGuard } from '../auth/guard';
 import { Prisma } from '@prisma/client';
 
 @UseGuards(JwtGuard)
@@ -30,13 +30,14 @@ export class GroupController {
       },
     });
   }
-  @Get('my-groups')
-  async findMyGroups(@Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return this.groupService.find(userId);
-  }
+  // Refactor when group membership done.
+  // @Get('my-groups')
+  // async findMyGroups(@Request() req) {
+  //   const { id: supabaseUid } = req.user || {};
+  //   const userId =
+  //     await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+  //   return this.groupService.find(userId);
+  // }
 
   @Get(':id')
   async findById(@Param('id') id: number) {

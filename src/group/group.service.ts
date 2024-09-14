@@ -24,23 +24,19 @@ export class GroupService {
     return user.id;
   }
 
-  async find(userId: number) {
-    const groups = await this.prisma.group.findMany({
-      where: { creatorId: userId, isDeleted: false },
-      include: {
-        creator: true,
-        // members: true, this to be included when group member endpoints are done.
-      },
-    });
+  // Refactor when group membership done.
+  // async find(userId: number) {
+  //   const groups = await this.prisma.user.aggregate
+  // }
 
-    if (groups.length === 0) {
-      throw new NotFoundException(
-        `No groups found for user with id: ${userId}`,
-      );
-    }
+  //   if (groups.length === 0) {
+  //     throw new NotFoundException(
+  //       `No groups found for user with id: ${userId}`,
+  //     );
+  //   }
 
-    return groups;
-  }
+  //   return groups;
+  // }
 
   async findOne(id: number) {
     const group = await this.prisma.group.findUnique({
