@@ -31,17 +31,25 @@ export class GroupController {
     });
   }
   // Refactor when group membership done.
-  // @Get('my-groups')
-  // async findMyGroups(@Request() req) {
-  //   const { id: supabaseUid } = req.user || {};
-  //   const userId =
-  //     await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-  //   return this.groupService.find(userId);
-  // }
+  @Get('my-groups')
+  async findMyGroups(@Request() req) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    return this.groupService.find(userId);
+  }
 
   @Get(':id')
   async findById(@Param('id') id: number) {
     return await this.groupService.findOne(+id);
+  }
+
+  @Get(':id/members')
+  async getGroupMembers(@Param('id') groupId: number, @Request() req) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    return await this.groupService.getGroupMembers(+groupId, userId);
   }
 
   @Patch(':id')
@@ -62,13 +70,5 @@ export class GroupController {
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
     return await this.groupService.delete(+id, userId);
-  }
-
-  @Get(':id/members')
-  async getGroupMembers(@Param('id') groupId: number, @Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.groupService.getGroupMembers(+groupId, userId);
   }
 }
