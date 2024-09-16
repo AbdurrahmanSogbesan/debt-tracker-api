@@ -45,12 +45,30 @@ export class GroupController {
   }
 
   @Patch(':id')
-  async update(@Body() data: Prisma.GroupUpdateInput, @Param('id') id: number) {
-    return await this.groupService.update(+id, data);
+  async update(
+    @Body() data: Prisma.GroupUpdateInput,
+    @Param('id') id: number,
+    @Request() req,
+  ) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    return await this.groupService.update(+id, data, userId);
   }
 
   @Patch(':id/delete')
-  async delete(@Param('id') id: number) {
-    return await this.groupService.delete(+id);
+  async delete(@Param('id') id: number, @Request() req) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    return await this.groupService.delete(+id, userId);
+  }
+
+  @Get(':id/members')
+  async getGroupMembers(@Param('id') groupId: number, @Request() req) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    return await this.groupService.getGroupMembers(+groupId, userId);
   }
 }
