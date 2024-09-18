@@ -27,7 +27,7 @@ export class GroupService {
     });
   }
 
-  async getUserIdFromSupabaseUid(supabaseUid: string) {
+  async getUserIdFromSupabaseUid(supabaseUid: string): Promise<number> {
     const user = await this.prisma.user.findUnique({
       where: { supabaseUid },
     });
@@ -70,9 +70,9 @@ export class GroupService {
 
   async findOne(id: number) {
     const group = await this.prisma.group.findUnique({
-      where: { id },
+      where: { id, isDeleted: false },
     });
-    if (!group || group.isDeleted) {
+    if (!group) {
       throw new NotFoundException('Group not found');
     }
     return group;
@@ -85,6 +85,7 @@ export class GroupService {
           groupId: id,
           userId: userId,
         },
+        isDeleted: false,
       },
     });
 
@@ -107,6 +108,7 @@ export class GroupService {
           groupId: id,
           userId: userId,
         },
+        isDeleted: false,
       },
     });
 
@@ -125,19 +127,17 @@ export class GroupService {
 
   async getGroupMembers(groupId: number, userId: number) {
     const group = await this.prisma.group.findUnique({
-      where: { id: groupId },
+      where: { id: groupId, isDeleted: false },
       include: {
         members: { include: { user: true }, where: { isDeleted: false } },
       },
     });
 
-    if (!group || group.isDeleted) {
+    if (!group) {
       throw new NotFoundException('Group not found');
     }
 
-    const member = group.members.find(
-      (member) => member.userId === userId && !member.isDeleted,
-    );
+    const member = group.members.find((member) => member.userId === userId);
 
     if (!member) {
       throw new ForbiddenException('You do not have access to this group');

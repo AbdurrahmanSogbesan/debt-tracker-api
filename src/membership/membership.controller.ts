@@ -9,7 +9,7 @@ import {
   Patch,
 } from '@nestjs/common';
 import { JwtGuard } from '../auth/guard';
-import { Prisma } from '@prisma/client';
+import { GroupRole, Prisma } from '@prisma/client';
 import { MembershipService } from './membership.service';
 import { GroupService } from '../group/group.service';
 
@@ -65,6 +65,8 @@ export class MembershipController {
   async updateMemberRole(
     @Param('groupId') groupId: number,
     @Param('userId') userId: number,
+    @Body('role') role: GroupRole,
+
     @Request() req,
   ) {
     const { id: supabaseUid } = req.user || {};
@@ -76,6 +78,7 @@ export class MembershipController {
       +groupId,
       +userId,
       updatedByUserId,
+      role,
     );
   }
 }
