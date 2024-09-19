@@ -184,8 +184,8 @@ export class MembershipService {
 
     const isCreator = group.creatorId === userId;
 
-    // If the user is an admin or the creator, handle adminship transfer
-    if (membershipToDelete.role === GroupRole.ADMIN || isCreator) {
+    // If the user is the creator, handle adminship transfer
+    if (isCreator) {
       // Find the next eligible member to pass adminship to
       const nextAdmin = group.members.find(
         (member) => member.userId !== userId,
