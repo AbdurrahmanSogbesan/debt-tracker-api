@@ -37,7 +37,6 @@ export class GroupService {
     return user.id;
   }
 
-  // Refactor when group membership done.
   async find(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -47,7 +46,20 @@ export class GroupService {
             isDeleted: false,
           },
           include: {
-            group: true,
+            group: {
+              include: {
+                members: {
+                  include: {
+                    user: {
+                      select: {
+                        firstName: true,
+                        lastName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
