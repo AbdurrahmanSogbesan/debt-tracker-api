@@ -15,8 +15,8 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { LoanCreateInputExtended } from './dto/create-individual-loan.dto';
-import { LoanUpdateDto } from './dto/update-individual-loan.dto';
+import { LoanCreateInput } from './dto/create-individual-loan.dto';
+import { UpdateLoanDto } from './dto/update-individual-loan.dto';
 
 @Injectable()
 export class LoanService {
@@ -33,7 +33,7 @@ export class LoanService {
   }
 
   async createLoan(
-    data: LoanCreateInputExtended,
+    data: LoanCreateInput,
     userId: number,
     otherUserId: number,
   ): Promise<Loan> {
@@ -89,7 +89,7 @@ export class LoanService {
 
   async updateLoan(
     id: number,
-    data: LoanUpdateDto,
+    data: UpdateLoanDto,
     userId: number,
   ): Promise<Loan> {
     const loan = await this.prisma.loan.findUnique({

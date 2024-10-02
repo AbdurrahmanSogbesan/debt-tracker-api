@@ -12,9 +12,9 @@ import {
 import { LoanService } from './loan.service';
 import { JwtGuard } from '../auth/guard';
 import { Loan } from '@prisma/client';
-import { LoanCreateInputExtended } from './dto/create-individual-loan.dto';
+import { LoanCreateInput } from './dto/create-individual-loan.dto';
 import { GroupService } from '../group/group.service';
-import { LoanUpdateDto } from './dto/update-individual-loan.dto';
+import { UpdateLoanDto } from './dto/update-individual-loan.dto';
 import { LoanTransferDto } from './dto/transfer-loan.dto';
 
 @UseGuards(JwtGuard)
@@ -27,7 +27,7 @@ export class LoanController {
 
   @Post()
   async createIndividualLoan(
-    @Body() createLoanDto: LoanCreateInputExtended,
+    @Body() createLoanDto: LoanCreateInput,
     @Request() req,
   ): Promise<Loan> {
     const { id: supabaseUid } = req.user || {};
@@ -61,7 +61,7 @@ export class LoanController {
   @Patch(':id')
   async updateIndividualLoan(
     @Param('id') id: number,
-    @Body() updateLoanDto: LoanUpdateDto,
+    @Body() updateLoanDto: UpdateLoanDto,
     @Request() req,
   ): Promise<Loan> {
     const { id: supabaseUid } = req.user || {};

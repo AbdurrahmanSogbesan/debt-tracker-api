@@ -4,7 +4,7 @@ import {
   TransactionDirection,
 } from '@prisma/client';
 
-export type LoanCreateInputExtended = Prisma.LoanCreateInput & {
+export type LoanCreateInput = Prisma.LoanCreateInput & {
   direction: TransactionDirection;
   group?: { connect: { id: number } };
   borrower: string;
