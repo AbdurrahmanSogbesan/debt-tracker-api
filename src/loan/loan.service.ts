@@ -16,7 +16,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { LoanCreateInputExtended } from './dto/create-individual-loan.dto';
-import { LoanUpdateInput } from './dto/update-individual-loan.dto';
+import { LoanUpdateDto } from './dto/update-individual-loan.dto';
 
 @Injectable()
 export class LoanService {
@@ -80,16 +80,16 @@ export class LoanService {
         transaction: true,
       },
     });
-    if (![loan.lenderId, loan.borrowerId].includes(userId)) {
-      throw new UnauthorizedException('You do not have access to this loan');
-    }
 
+    if (!loan) {
+      throw new NotFoundException(`Loan with ID ${id} not found`);
+    }
     return loan;
   }
 
   async updateLoan(
     id: number,
-    data: LoanUpdateInput,
+    data: LoanUpdateDto,
     userId: number,
   ): Promise<Loan> {
     const loan = await this.prisma.loan.findUnique({
@@ -112,9 +112,8 @@ export class LoanService {
         transaction: {
           update: {
             amount: data.amount,
-            description: data.description || 'Updated loan transaction',
+            description: data.description,
             date: new Date(),
-            direction: data.direction,
           },
         },
       },

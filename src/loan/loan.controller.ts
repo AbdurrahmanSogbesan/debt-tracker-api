@@ -14,7 +14,7 @@ import { JwtGuard } from '../auth/guard';
 import { Loan } from '@prisma/client';
 import { LoanCreateInputExtended } from './dto/create-individual-loan.dto';
 import { GroupService } from '../group/group.service';
-import { LoanUpdateInput } from './dto/update-individual-loan.dto';
+import { LoanUpdateDto } from './dto/update-individual-loan.dto';
 import { LoanTransferDto } from './dto/transfer-loan.dto';
 
 @UseGuards(JwtGuard)
@@ -36,7 +36,7 @@ export class LoanController {
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
 
     const borrower = await this.loanService.getUserByEmail(
-      req.body.borrowerEmail,
+      createLoanDto.borrower,
     );
     return await this.loanService.createLoan(
       createLoanDto,
@@ -61,7 +61,7 @@ export class LoanController {
   @Patch(':id')
   async updateIndividualLoan(
     @Param('id') id: number,
-    @Body() updateLoanDto: LoanUpdateInput,
+    @Body() updateLoanDto: LoanUpdateDto,
     @Request() req,
   ): Promise<Loan> {
     const { id: supabaseUid } = req.user || {};

@@ -7,5 +7,5 @@ import {
 export type LoanCreateInputExtended = Prisma.LoanCreateInput & {
   direction: TransactionDirection;
   group?: { connect: { id: number } };
-  // borrowerEmail: string;
+  borrower: string;
 };
