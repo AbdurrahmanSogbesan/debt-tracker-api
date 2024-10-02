@@ -7,6 +7,8 @@ import { UserModule } from './user/user.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { GroupModule } from './group/group.module';
 import { MembershipModule } from './membership/membership.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { LoanModule } from './loan/loan.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { MembershipModule } from './membership/membership.module';
     UserModule,
     GroupModule,
     MembershipModule,
+    TransactionModule,
+    LoanModule,
   ],
   controllers: [AppController],
   providers: [AppService],
