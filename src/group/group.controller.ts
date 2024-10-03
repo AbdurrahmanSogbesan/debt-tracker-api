@@ -20,16 +20,16 @@ export class GroupController {
   async create(
     @Body()
     data: Omit<Prisma.GroupCreateInput, 'creator'> & {
-      memberEmails?: string[];
+      members?: string[];
     },
     @Request() req,
   ) {
     const { id: supabaseUid } = req.user || {};
-    const { memberEmails, ...groupData } = data;
+    const { members, ...groupData } = data;
 
     const [creatorId, memberIds] = await Promise.all([
       this.groupService.getUserIdFromSupabaseUid(supabaseUid),
-      this.groupService.getUserIdsByEmails(memberEmails || []),
+      this.groupService.getUserIdsByEmails(members || []),
     ]);
 
     return await this.groupService.create({
@@ -38,7 +38,6 @@ export class GroupController {
       memberIds,
     });
   }
-  // Refactor when group membership done.
   @Get('my-groups')
   async findMyGroups(@Request() req) {
     const { id: supabaseUid } = req.user || {};
