@@ -17,20 +17,27 @@ import { Prisma } from '@prisma/client';
 export class GroupController {
   constructor(private readonly groupService: GroupService) {}
   @Post()
-  async create(@Body() data: Prisma.GroupCreateInput, @Request() req) {
+  async create(
+    @Body()
+    data: Omit<Prisma.GroupCreateInput, 'creator'> & {
+      members?: string[];
+    },
+    @Request() req,
+  ) {
     const { id: supabaseUid } = req.user || {};
+    const { members, ...groupData } = data;
 
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    const [creatorId, memberIds] = await Promise.all([
+      this.groupService.getUserIdFromSupabaseUid(supabaseUid),
+      this.groupService.getUserIdsByEmails(members || []),
+    ]);
 
     return await this.groupService.create({
-      ...data,
-      creator: {
-        connect: { id: userId },
-      },
+      ...groupData,
+      creatorId,
+      memberIds,
     });
   }
-  // Refactor when group membership done.
   @Get('my-groups')
   async findMyGroups(@Request() req) {
     const { id: supabaseUid } = req.user || {};

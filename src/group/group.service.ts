@@ -9,23 +9,6 @@ import { PrismaService } from '../prisma/prisma.service';
 @Injectable()
 export class GroupService {
   constructor(private prisma: PrismaService) {}
-  async create(data: Prisma.GroupCreateInput): Promise<Group> {
-    return this.prisma.group.create({
-      data: {
-        ...data,
-        members: {
-          create: {
-            userId: data.creator.connect.id,
-            role: GroupRole.ADMIN,
-          },
-        },
-      },
-      include: {
-        creator: true,
-        members: true,
-      },
-    });
-  }
 
   async getUserIdFromSupabaseUid(supabaseUid: string): Promise<number> {
     const user = await this.prisma.user.findUnique({
@@ -35,6 +18,51 @@ export class GroupService {
       throw new Error('User not found');
     }
     return user.id;
+  }
+
+  async getUserIdsByEmails(emails: string[]): Promise<number[]> {
+    const users = await this.prisma.user.findMany({
+      where: {
+        email: { in: emails },
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    return users.map((user) => user.id);
+  }
+
+  async create(
+    data: Omit<Prisma.GroupCreateInput, 'creator' | 'members'> & {
+      creatorId: number;
+      memberIds: number[];
+    },
+  ): Promise<Group> {
+    const { creatorId, memberIds, ...groupData } = data;
+
+    return this.prisma.group.create({
+      data: {
+        ...groupData,
+        creator: {
+          connect: { id: creatorId },
+        },
+        members: {
+          createMany: {
+            data: [
+              { userId: creatorId, role: GroupRole.ADMIN },
+              ...memberIds.map((userId) => ({
+                userId,
+                role: GroupRole.MEMBER,
+              })),
+            ],
+            skipDuplicates: true,
+          },
+        },
+      },
+      include: {
+        creator: true,
+        members: true,
+      },
+    });
   }
 
   async find(userId: number) {
