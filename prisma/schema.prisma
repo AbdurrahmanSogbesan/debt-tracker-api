@@ -19,8 +19,12 @@ enum TransactionCategory {
   LOAN
 }
 
+enum TransactionDirection {
+  IN
+  OUT
+}
+
 enum LoanStatus {
-  PENDING
   ACTIVE
   REPAID
   OVERDUE
@@ -47,7 +51,6 @@ model User {
   lastName                 String    @default("")
   email                    String    @unique
   phone                    String?   @default("") @db.VarChar(50)
-  dob                      DateTime? @db.Timestamptz(3)
   createdGroups            Group[]
   supabaseUid              String    @unique
   expoPushToken            String    @default("")
@@ -106,13 +109,16 @@ model Transaction {
   amount      Float
   description String
   category    TransactionCategory
+  direction   TransactionDirection
   date        DateTime            @db.Timestamptz(3)
 
   group   Group? @relation(fields: [groupId], references: [id])
-  groupId Int
+  groupId Int?
 
   payer   User @relation("PaidBy", fields: [payerId], references: [id])
   payerId Int
+
+  loan   Loan?
 
   splits    TransactionSplit[]
   isDeleted Boolean            @default(false)
@@ -141,14 +147,17 @@ model Loan {
   uuid           String     @unique @default(uuid())
   createdAt      DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
-  amount         Float
-  description    String
   dueDate        DateTime?  @db.Timestamptz(3)
   isAcknowledged Boolean
-  status         LoanStatus @default(PENDING)
+  status         LoanStatus @default(ACTIVE)
+  amount Float
+  description String
 
-  group   Group @relation(fields: [groupId], references: [id])
-  groupId Int
+  group   Group? @relation(fields: [groupId], references: [id])
+  groupId Int?
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  transactionId Int     @unique  
 
   lender   User @relation("Lender", fields: [lenderId], references: [id])
   lenderId Int
