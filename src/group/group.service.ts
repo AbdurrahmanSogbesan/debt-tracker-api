@@ -60,7 +60,16 @@ export class GroupService {
       },
       include: {
         creator: true,
-        members: true,
+        members: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -99,22 +108,43 @@ export class GroupService {
 
     const groups = user.memberships.map((membership) => membership.group);
 
-    if (groups.length === 0) {
-      throw new NotFoundException(
-        `No active groups found for this user: ${user.firstName}`,
-      );
-    }
-
     return groups;
   }
 
   async findOne(id: number) {
     const group = await this.prisma.group.findUnique({
       where: { id, isDeleted: false },
+      include: {
+        transactions: {
+          where: {
+            isDeleted: false,
+          },
+          include: {
+            splits: true,
+            loan: true,
+          },
+        },
+        creator: true,
+        members: {
+          where: {
+            isDeleted: false,
+          },
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
     });
+
     if (!group) {
       throw new NotFoundException('Group not found');
     }
+
     return group;
   }
 
