@@ -14,8 +14,6 @@ import {
 } from '@prisma/client';
 
 export class GetTransactionsDto {
-  userId: number;
-
   @IsOptional()
   @IsEnum(TransactionCategory)
   category?: TransactionCategory;

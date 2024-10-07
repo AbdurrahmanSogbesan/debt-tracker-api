@@ -16,7 +16,7 @@ export class TransactionService {
   // Creating a transaction would be done in the respective services of the different categories(For now, it would just be in the LoanService)
 
   async getTransactions(
-    params: GetTransactionsDto,
+    params: GetTransactionsDto & { userId: number },
   ): Promise<{ transactions: Transaction[]; total: number }> {
     const {
       userId,
@@ -29,12 +29,18 @@ export class TransactionService {
     } = params;
 
     const where: Prisma.TransactionWhereInput = {
-      payerId: userId,
       category,
       direction,
       ...(startDate || endDate
         ? { date: { gte: startDate, lte: endDate } }
         : {}),
+      ...(category === TransactionCategory.LOAN
+        ? {
+            loan: {
+              OR: [{ lenderId: userId }, { borrowerId: userId }],
+            },
+          }
+        : { payerId: userId }),
     };
 
     const [transactions, total] = await Promise.all([
@@ -45,6 +51,7 @@ export class TransactionService {
         take: pageSize,
         include: {
           loan: true,
+          splits: true,
           payer: {
             select: {
               id: true,
