@@ -46,11 +46,16 @@ export class TransactionService {
     const [transactions, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
-        orderBy: { date: 'asc' },
+        orderBy: { date: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
-          loan: true,
+          loan: {
+            include: {
+              lender: true,
+              borrower: true,
+            },
+          },
           splits: true,
           payer: {
             select: {
