@@ -8,4 +8,5 @@ export type LoanCreateInput = Prisma.LoanCreateInput & {
   direction: TransactionDirection;
   group?: { connect: { id: number } };
   borrower: string;
+  title: string;
 };

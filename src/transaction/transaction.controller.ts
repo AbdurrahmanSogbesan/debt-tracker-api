@@ -9,7 +9,7 @@ import {
   Patch,
   Query,
 } from '@nestjs/common';
-import { TransactionService } from './transaction.service';
+import { TransactionService, TransactionSummary } from './transaction.service';
 import { JwtGuard } from '../auth/guard';
 import { GroupService } from '../group/group.service';
 import { GetTransactionsDto } from './dto/get-transactions.dto';
@@ -27,7 +27,7 @@ export class TransactionController {
   async getTransactions(
     @Query() query: GetTransactionsDto,
     @Request() req,
-  ): Promise<{ transactions: Transaction[]; total: number }> {
+  ): Promise<TransactionSummary> {
     const { id: supabaseUid } = req.user || {};
 
     const userId =

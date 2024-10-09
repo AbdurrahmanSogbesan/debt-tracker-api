@@ -37,36 +37,68 @@ export class LoanService {
     userId: number,
     otherUserId: number,
   ): Promise<Loan> {
+    // Fetch user names
+    const [user, otherUser] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: otherUserId },
+        select: { firstName: true },
+      }),
+    ]);
+
     const isUserLender = data.direction === TransactionDirection.OUT;
+    const lenderName = isUserLender ? user.firstName : otherUser.firstName;
+    const borrowerName = isUserLender ? otherUser.firstName : user.firstName;
+    const lenderId = isUserLender ? userId : otherUserId;
+    const borrowerId = isUserLender ? otherUserId : userId;
+
+    const loanTitle = `Loan from ${lenderName} to ${borrowerName}`;
 
     return await this.prisma.loan.create({
       data: {
         description: data.description,
         amount: data.amount,
-        lender: { connect: { id: isUserLender ? userId : otherUserId } },
-        borrower: { connect: { id: isUserLender ? otherUserId : userId } },
+        lender: { connect: { id: lenderId } },
+        borrower: { connect: { id: borrowerId } },
         isAcknowledged: false,
+        dueDate: data.dueDate,
         group: data.group
           ? { connect: { id: data.group.connect.id } }
           : undefined,
-        transaction: {
-          create: {
-            amount: data.amount,
-            description: data.description || 'Loan transaction',
-            category: TransactionCategory.LOAN,
-            direction: data.direction,
-            date: new Date(),
-            payer: {
-              connect: { id: isUserLender ? userId : otherUserId },
+        transactions: {
+          create: [
+            {
+              amount: data.amount,
+              description: `Loan given: ${data.description}`,
+              category: TransactionCategory.LOAN,
+              direction: TransactionDirection.OUT,
+              date: new Date(),
+              payer: { connect: { id: lenderId } },
+              group: data.group
+                ? { connect: { id: data.group.connect.id } }
+                : undefined,
+              title: loanTitle,
             },
-            group: data.group
-              ? { connect: { id: data.group.connect.id } }
-              : undefined,
-          },
+            {
+              amount: data.amount,
+              description: `Loan received: ${data.description}`,
+              category: TransactionCategory.LOAN,
+              direction: TransactionDirection.IN,
+              date: new Date(),
+              payer: { connect: { id: borrowerId } },
+              group: data.group
+                ? { connect: { id: data.group.connect.id } }
+                : undefined,
+              title: loanTitle,
+            },
+          ],
         },
       },
       include: {
-        transaction: true,
+        transactions: true,
         lender: true,
         borrower: true,
       },
@@ -77,7 +109,9 @@ export class LoanService {
     const loan = await this.prisma.loan.findUnique({
       where: { id, isDeleted: false },
       include: {
-        transaction: true,
+        transactions: true,
+        lender: true,
+        borrower: true,
       },
     });
 
@@ -94,7 +128,7 @@ export class LoanService {
   ): Promise<Loan> {
     const loan = await this.prisma.loan.findUnique({
       where: { id, isDeleted: false, lenderId: userId },
-      include: { transaction: true },
+      include: { transactions: true },
     });
 
     if (!loan) {
@@ -109,16 +143,19 @@ export class LoanService {
         dueDate: data.dueDate,
         isAcknowledged: data.isAcknowledged,
         status: data.status,
-        transaction: {
-          update: {
-            amount: data.amount,
-            description: data.description,
-            date: new Date(),
+        transactions: {
+          updateMany: {
+            where: { loanId: id },
+            data: {
+              amount: data.amount,
+              description: data.description,
+              date: new Date(),
+            },
           },
         },
       },
       include: {
-        transaction: true,
+        transactions: true,
         lender: true,
         borrower: true,
       },
@@ -132,7 +169,7 @@ export class LoanService {
   ): Promise<Loan> {
     const loan = await this.prisma.loan.findUnique({
       where: { id, isDeleted: false, lenderId: userId },
-      include: { transaction: true, borrower: true },
+      include: { transactions: true, borrower: true },
     });
 
     if (!loan) {
@@ -153,14 +190,17 @@ export class LoanService {
       where: { id },
       data: {
         borrower: { connect: { id: newBorrowerId } },
-        transaction: {
-          update: {
-            description: `Loan transferred from ${loan.borrower.email} to ${newBorrower.email}`,
+        transactions: {
+          updateMany: {
+            where: { loanId: id },
+            data: {
+              description: `Loan transferred from ${loan.borrower.email} to ${newBorrower.email}`,
+            },
           },
         },
       },
       include: {
-        transaction: true,
+        transactions: true,
         lender: true,
         borrower: true,
       },
@@ -170,7 +210,7 @@ export class LoanService {
   async deleteLoan(id: number, userId: number) {
     const loan = await this.prisma.loan.findUnique({
       where: { id, isDeleted: false, lenderId: userId },
-      include: { transaction: true },
+      include: { transactions: true },
     });
 
     if (!loan) {
@@ -181,8 +221,9 @@ export class LoanService {
       where: { id },
       data: {
         isDeleted: true,
-        transaction: {
-          update: {
+        transactions: {
+          updateMany: {
+            where: { loanId: id },
             data: { isDeleted: true },
           },
         },
