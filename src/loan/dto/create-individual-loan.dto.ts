@@ -6,6 +6,6 @@ import {
 
 export type LoanCreateInput = Prisma.LoanCreateInput & {
   direction: TransactionDirection;
-  group?: { connect: { id: number } };
+  groupId?: number;
   borrower: string;
 };

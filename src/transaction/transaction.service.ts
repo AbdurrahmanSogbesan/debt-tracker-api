@@ -9,15 +9,19 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { GetTransactionsDto } from './dto/get-transactions.dto';
 
+export interface TransactionSummary {
+  transactions: Transaction[];
+  total: number | { in: number; out: number; total: number };
+  transactionCount: number;
+}
+
 @Injectable()
 export class TransactionService {
   constructor(private prisma: PrismaService) {}
 
-  // Creating a transaction would be done in the respective services of the different categories(For now, it would just be in the LoanService)
-
   async getTransactions(
     params: GetTransactionsDto & { userId: number },
-  ): Promise<{ transactions: Transaction[]; total: number }> {
+  ): Promise<TransactionSummary> {
     const {
       userId,
       category,
@@ -28,35 +32,38 @@ export class TransactionService {
       pageSize = 10,
     } = params;
 
-    const where: Prisma.TransactionWhereInput = {
+    const baseWhere: Prisma.TransactionWhereInput = {
+      isDeleted: false,
       category,
-      direction,
       ...(startDate || endDate
         ? { date: { gte: startDate, lte: endDate } }
         : {}),
-      ...(category === TransactionCategory.LOAN
-        ? {
-            loan: {
-              OR: [{ lenderId: userId }, { borrowerId: userId }],
-            },
-          }
-        : { payerId: userId }),
+      payerId: userId, // This now covers both regular transactions and loan transactions
     };
 
-    const [transactions, total] = await Promise.all([
+    const [transactions, aggregations] = await Promise.all([
       this.prisma.transaction.findMany({
-        where,
+        where: { ...baseWhere, direction },
         orderBy: { date: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
           loan: {
             include: {
-              lender: true,
-              borrower: true,
+              lender: {
+                select: {
+                  firstName: true,
+                  email: true,
+                },
+              },
+              borrower: {
+                select: {
+                  firstName: true,
+                  email: true,
+                },
+              },
             },
           },
-          splits: true,
           payer: {
             select: {
               id: true,
@@ -66,9 +73,53 @@ export class TransactionService {
           },
         },
       }),
-      this.prisma.transaction.count({ where }),
+      this.prisma.transaction.aggregate({
+        where: { ...baseWhere, direction },
+        _sum: {
+          amount: true,
+        },
+        _count: {
+          _all: true,
+        },
+      }),
     ]);
 
-    return { transactions, total };
+    let totalAmount: number | { in: number; out: number; total: number };
+    let transactionCount: number;
+
+    if (!direction) {
+      const [inAggregate, outAggregate] = await Promise.all([
+        this.prisma.transaction.aggregate({
+          where: { ...baseWhere, direction: TransactionDirection.IN },
+          _sum: { amount: true },
+          _count: { _all: true },
+        }),
+        this.prisma.transaction.aggregate({
+          where: { ...baseWhere, direction: TransactionDirection.OUT },
+          _sum: { amount: true },
+          _count: { _all: true },
+        }),
+      ]);
+
+      const inAmount = inAggregate._sum.amount || 0;
+      const outAmount = outAggregate._sum.amount || 0;
+
+      totalAmount = {
+        in: inAmount,
+        out: outAmount,
+        total: inAmount + outAmount,
+      };
+      transactionCount =
+        (inAggregate._count._all || 0) + (outAggregate._count._all || 0);
+    } else {
+      totalAmount = aggregations._sum.amount || 0;
+      transactionCount = aggregations._count._all || 0;
+    }
+
+    return {
+      transactions,
+      total: totalAmount,
+      transactionCount,
+    };
   }
 }

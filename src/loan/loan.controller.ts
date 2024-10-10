@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Query,
+  Delete,
 } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from '../auth/guard';
