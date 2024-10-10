@@ -17,7 +17,6 @@ import { LoanCreateInput } from './dto/create-individual-loan.dto';
 import { GroupService } from '../group/group.service';
 import { UpdateLoanDto } from './dto/update-individual-loan.dto';
 import { LoanTransferDto } from './dto/transfer-loan.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
 
 @UseGuards(JwtGuard)
 @Controller('loan')
@@ -101,5 +100,4 @@ export class LoanController {
 
     return await this.loanService.deleteLoan(+id, userId);
   }
-
 }

@@ -13,7 +13,6 @@ export interface TransactionSummary {
   transactions: Transaction[];
   total: number | { in: number; out: number; total: number };
   transactionCount: number;
-  averageTransactionAmount: number;
 }
 
 @Injectable()
@@ -39,16 +38,10 @@ export class TransactionService {
       ...(startDate || endDate
         ? { date: { gte: startDate, lte: endDate } }
         : {}),
-      ...(category === TransactionCategory.LOAN
-        ? {
-            loan: {
-              OR: [{ lenderId: userId }, { borrowerId: userId }],
-            },
-          }
-        : { payerId: userId }),
+      payerId: userId, // This now covers both regular transactions and loan transactions
     };
 
-    const [transactions, total, aggregations] = await Promise.all([
+    const [transactions, aggregations] = await Promise.all([
       this.prisma.transaction.findMany({
         where: { ...baseWhere, direction },
         orderBy: { date: 'desc' },
@@ -71,7 +64,6 @@ export class TransactionService {
               },
             },
           },
-          splits: true,
           payer: {
             select: {
               id: true,
@@ -81,7 +73,6 @@ export class TransactionService {
           },
         },
       }),
-      this.prisma.transaction.count({ where: { ...baseWhere, direction } }),
       this.prisma.transaction.aggregate({
         where: { ...baseWhere, direction },
         _sum: {
@@ -90,43 +81,45 @@ export class TransactionService {
         _count: {
           _all: true,
         },
-        _avg: {
-          amount: true,
-        },
       }),
     ]);
 
     let totalAmount: number | { in: number; out: number; total: number };
+    let transactionCount: number;
 
     if (!direction) {
-      const [inTotal, outTotal] = await Promise.all([
+      const [inAggregate, outAggregate] = await Promise.all([
         this.prisma.transaction.aggregate({
           where: { ...baseWhere, direction: TransactionDirection.IN },
           _sum: { amount: true },
+          _count: { _all: true },
         }),
         this.prisma.transaction.aggregate({
           where: { ...baseWhere, direction: TransactionDirection.OUT },
           _sum: { amount: true },
+          _count: { _all: true },
         }),
       ]);
 
-      const inAmount = inTotal._sum.amount || 0;
-      const outAmount = outTotal._sum.amount || 0;
+      const inAmount = inAggregate._sum.amount || 0;
+      const outAmount = outAggregate._sum.amount || 0;
 
       totalAmount = {
         in: inAmount,
         out: outAmount,
         total: inAmount + outAmount,
       };
+      transactionCount =
+        (inAggregate._count._all || 0) + (outAggregate._count._all || 0);
     } else {
       totalAmount = aggregations._sum.amount || 0;
+      transactionCount = aggregations._count._all || 0;
     }
 
     return {
       transactions,
       total: totalAmount,
-      transactionCount: total,
-      averageTransactionAmount: aggregations._avg.amount || 0,
+      transactionCount,
     };
   }
 }

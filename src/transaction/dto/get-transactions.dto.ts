@@ -10,7 +10,6 @@ import {
 import {
   TransactionCategory,
   TransactionDirection,
-  // Will add loan status when the loan endpoint is done
 } from '@prisma/client';
 
 export class GetTransactionsDto {
