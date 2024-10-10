@@ -38,7 +38,6 @@ export class LoanService {
     userId: number,
     otherUserId: number,
   ): Promise<Loan> {
-    // Function to fetch user by ID
     const getUserFirstName = async (id: number) => {
       const user = await this.prisma.user.findUnique({
         where: { id },
@@ -64,15 +63,8 @@ export class LoanService {
     const loanTitle = `Loan from ${lenderName} to ${borrowerName}`;
 
     // Simplified group connection logic
-    const groupConnect = data.group
-      ? {
-          connect: {
-            id:
-              typeof data.group === 'number'
-                ? data.group
-                : data.group?.connect?.id,
-          },
-        }
+    const groupConnect = data.groupId
+      ? { connect: { id: data.groupId } }
       : undefined;
 
     // Transaction creation template
@@ -202,7 +194,7 @@ export class LoanService {
     // Check if the new borrower is different from the current borrower
     if (loan.borrower.id === newBorrowerId) {
       throw new BadRequestException(
-        `The loan is already assigned to this borrower (ID: ${newBorrowerId})`,
+        `The loan is already assigned to this borrower`,
       );
     }
 
@@ -227,6 +219,7 @@ export class LoanService {
 
     const newLoanTitle = `Loan from ${loan.lender.firstName} to ${newBorrower.firstName}`;
 
+    // Sequential Transaction here to make sure if one process/query fails, the entire thing fails.
     return await this.prisma.$transaction(async (prisma) => {
       // Update the loan
       const updatedLoan = await prisma.loan.update({
