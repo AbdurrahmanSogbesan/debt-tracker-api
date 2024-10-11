@@ -115,13 +115,18 @@ export class LoanService {
     });
   }
 
-  async getLoanById(id: number, userId: number): Promise<Loan | null> {
+  async getLoanById(id: number): Promise<Loan | null> {
     const loan = await this.prisma.loan.findUnique({
       where: { id, isDeleted: false },
       include: {
         transactions: true,
         lender: true,
         borrower: true,
+        group: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 

@@ -47,16 +47,8 @@ export class LoanController {
   }
 
   @Get(':id')
-  async getLoanById(
-    @Param('id') id: number,
-    @Request() req,
-  ): Promise<Loan | null> {
-    const { id: supabaseUid } = req.user || {};
-
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
-    return await this.loanService.getLoanById(+id, userId);
+  async getLoanById(@Param('id') id: number): Promise<Loan | null> {
+    return await this.loanService.getLoanById(+id);
   }
 
   @Patch(':id')
