@@ -89,7 +89,7 @@ export class MembershipService {
     }
 
     const memberToRemove = group.members.find(
-      (member) => member.userId === userId
+      (member) => member.userId === userId,
     );
     if (!memberToRemove) {
       throw new NotFoundException('Member not found in this group');
@@ -115,13 +115,13 @@ export class MembershipService {
     groupId: number,
     userId: number,
     updatedByUserId: number,
-    newRole: GroupRole, 
+    newRole: GroupRole,
   ) {
     const group = await this.getGroupWithMembers(
       groupId,
       {},
       {
-        members: {  where: { isDeleted: false } },
+        members: { where: { isDeleted: false } },
       },
     );
 
@@ -132,7 +132,7 @@ export class MembershipService {
 
     // Find the member whose role needs to be updated
     const memberToUpdate = group.members.find(
-      (member) => member.userId === userId
+      (member) => member.userId === userId,
     );
     if (!memberToUpdate) {
       throw new NotFoundException('Member not found in this group');
@@ -140,7 +140,7 @@ export class MembershipService {
 
     // Prevent demoting the last admin
     const adminMembers = group.members.filter(
-      (member) => member.role === GroupRole.ADMIN
+      (member) => member.role === GroupRole.ADMIN,
     );
 
     if (
@@ -171,12 +171,14 @@ export class MembershipService {
     const group = await this.getGroupWithMembers(
       groupId,
       {},
-      { members: { orderBy: { joinedAt: 'asc' }, where: {isDeleted: false}} },
+      {
+        members: { orderBy: { joinedAt: 'asc' }, where: { isDeleted: false } },
+      },
     );
 
     // Find the membership for the user trying to leave
     const membershipToDelete = group.members.find(
-      (member) => member.userId === userId 
+      (member) => member.userId === userId,
     );
     if (!membershipToDelete) {
       throw new NotFoundException('User is not a member of this group');

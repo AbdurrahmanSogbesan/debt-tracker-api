@@ -28,6 +28,17 @@ export class UserService {
   async findAuthUser(supabaseUid: string) {
     const user = await this.prisma.user.findUnique({
       where: { supabaseUid },
+      include: {
+        memberships: {
+          where: {
+            isDeleted: false,
+          },
+          include: {
+            group: true,
+          },
+        },
+        notifications: true,
+      },
     });
 
     if (!user || user.isDeleted) {
