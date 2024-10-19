@@ -10,6 +10,39 @@ import * as dotenv from 'dotenv';
 
 const prisma = new PrismaClient();
 
+
+async function seedUsers() {
+  const defaultUsers = [
+    {
+      email: 'test1@example.com',
+      supabaseUid: 'seed_1',
+      firstName: 'Test',
+      lastName: 'User1',
+      phone: '+1234567890',
+      isDeleted: false,
+    },
+    {
+      email: 'test2@example.com',
+      supabaseUid: 'seed_2',
+      firstName: 'Test',
+      lastName: 'User2',
+      phone: '+1234567891',
+      isDeleted: false,
+    },
+  ];
+
+  console.log('Creating default users...');
+
+  for (const user of defaultUsers) {
+    try {
+      await prisma.user.create({ data: user });
+      console.log(`Created user: ${user.email}`);
+    } catch (error) {
+      console.log(`Skipping user ${user.email} - may already exist`);
+    }
+  }
+}
+
 async function createGroup(creatorId: number, memberIds: number[]) {
   return prisma.group.create({
     data: {
@@ -31,19 +64,6 @@ async function createGroup(creatorId: number, memberIds: number[]) {
         },
       },
     },
-    include: {
-      creator: true,
-      members: {
-        include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-      },
-    },
   });
 }
 
@@ -53,40 +73,9 @@ async function createLoan(
   groupId: number | null,
   amount: number,
 ) {
-  // Fetch user names
-  const [lender, borrower] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: lenderId },
-      select: { firstName: true },
-    }),
-    prisma.user.findUnique({
-      where: { id: borrowerId },
-      select: { firstName: true },
-    }),
-  ]);
-
-  const loanTitle = `Loan from ${lender?.firstName} to ${borrower?.firstName}`;
+  const loanTitle = `Loan from ${lenderId} to ${borrowerId}`;
   const description = faker.lorem.sentence();
   const dueDate = faker.date.future();
-
-  // Group connection logic
-  const groupConnect = groupId ? { connect: { id: groupId } } : undefined;
-
-  // Transaction creation template
-  const createTransaction = (
-    direction: TransactionDirection,
-    payerId: number,
-    transDescription: string,
-  ) => ({
-    amount,
-    description: transDescription,
-    category: TransactionCategory.LOAN,
-    direction,
-    date: new Date(),
-    payer: { connect: { id: payerId } },
-    group: groupConnect,
-    title: loanTitle,
-  });
 
   return prisma.loan.create({
     data: {
@@ -96,42 +85,47 @@ async function createLoan(
       borrower: { connect: { id: borrowerId } },
       isAcknowledged: false,
       dueDate,
-      group: groupConnect,
+      group: groupId ? { connect: { id: groupId } } : undefined,
       transactions: {
         create: [
-          createTransaction(
-            TransactionDirection.OUT,
-            lenderId,
-            `Loan given: ${description}`,
-          ),
-          createTransaction(
-            TransactionDirection.IN,
-            borrowerId,
-            `Loan received: ${description}`,
-          ),
+          {
+            amount,
+            description: `Loan given: ${description}`,
+            category: 'LOAN',
+            direction: 'OUT',
+            date: new Date(),
+            payer: { connect: { id: lenderId } },
+            group: groupId ? { connect: { id: groupId } } : undefined,
+            title: loanTitle,
+          },
+          {
+            amount,
+            description: `Loan received: ${description}`,
+            category: 'LOAN',
+            direction: 'IN',
+            date: new Date(),
+            payer: { connect: { id: borrowerId } },
+            group: groupId ? { connect: { id: groupId } } : undefined,
+            title: loanTitle,
+          },
         ],
       },
-    },
-    include: {
-      transactions: true,
-      lender: true,
-      borrower: true,
     },
   });
 }
 
 async function main() {
-  const fakerRounds = 5;
+  const fakerRounds = 2;
   dotenv.config();
-  console.log(`Seeding ${fakerRounds} times...`);
+  console.log(`Seeding ${fakerRounds} rounds...`);
 
-  // Get existing users
+  // Step 1: Seed users
+  await seedUsers();
+
+  // Step 2: Get existing users
   const existingUsers = await prisma.user.findMany({
     where: { isDeleted: false },
-    select: {
-      id: true,
-      firstName: true,
-    },
+    select: { id: true },
   });
 
   if (existingUsers.length < 2) {
@@ -142,17 +136,16 @@ async function main() {
 
   console.log(`Found ${existingUsers.length} existing users`);
 
-  // Create groups
-  for (let i = 0; i < fakerRounds; i++) {
-    console.log(`Creating group ${i + 1}/${fakerRounds}`);
-
-    // Select random creator and members
+  // Step 3: Create groups and loans
+  const groupPromises = Array.from({ length: fakerRounds }, async (_, i) => {
     const shuffledUsers = [...existingUsers].sort(() => Math.random() - 0.5);
     const creator = shuffledUsers[0];
     const members = shuffledUsers.slice(
       1,
-      faker.number.int({ min: 2, max: 4 }),
+      faker.datatype.number({ min: 2, max: 4 }),
     );
+
+    console.log(`Creating group ${i + 1}/${fakerRounds}`);
 
     const group = await createGroup(
       creator.id,
@@ -160,37 +153,41 @@ async function main() {
     );
 
     // Create 1-3 loans for each group
-    const loanCount = faker.number.int({ min: 1, max: 3 });
-    console.log(`Creating ${loanCount} loans for group ${i + 1}`);
+    const loanPromises = Array.from(
+      { length: faker.datatype.number({ min: 1, max: 3 }) },
+      async () => {
+        const [lender, borrower] = faker.helpers.arrayElements(
+          [creator, ...members],
+          2,
+        );
+        return createLoan(
+          lender.id,
+          borrower.id,
+          group.id,
+          faker.datatype.number({ min: 100000, max: 500000 }),
+        );
+      },
+    );
 
-    const groupMembers = [creator, ...members];
+    await Promise.all(loanPromises);
+  });
 
-    for (let j = 0; j < loanCount; j++) {
-      // Select random lender and borrower from group members
-      const [lender, borrower] = faker.helpers.arrayElements(groupMembers, 2);
-
-      await createLoan(
+  // Step 4: Create non-group loans between random users
+  const nonGroupLoanPromises = Array.from(
+    { length: faker.datatype.number({ min: 3, max: 7 }) },
+    async () => {
+      const [lender, borrower] = faker.helpers.arrayElements(existingUsers, 2);
+      return createLoan(
         lender.id,
         borrower.id,
-        group.id,
-        faker.number.float({ min: 100000, max:500000 , precision: 2 }),
+        null,
+        faker.datatype.number({ min: 50, max: 500 }),
       );
-    }
-  }
+    },
+  );
 
-  // Create some non-group loans between random users
-  const nonGroupLoanCount = faker.number.int({ min: 3, max: 7 });
-  console.log(`Creating ${nonGroupLoanCount} non-group loans`);
-
-  for (let i = 0; i < nonGroupLoanCount; i++) {
-    const [lender, borrower] = faker.helpers.arrayElements(existingUsers, 2);
-    await createLoan(
-      lender.id,
-      borrower.id,
-      null,
-      faker.number.float({ min: 50, max: 500, precision: 2 }),
-    );
-  }
+  // Await all promises
+  await Promise.all([...groupPromises, ...nonGroupLoanPromises]);
 
   console.log('Seeding completed successfully');
 }
