@@ -25,6 +25,7 @@ export class TransactionService {
     const {
       userId,
       category,
+      group,
       direction,
       startDate,
       endDate,
@@ -39,6 +40,7 @@ export class TransactionService {
         ? { date: { gte: startDate, lte: endDate } }
         : {}),
       payerId: userId, // This now covers both regular transactions and loan transactions
+      groupId: group,
     };
 
     const [transactions, aggregations] = await Promise.all([

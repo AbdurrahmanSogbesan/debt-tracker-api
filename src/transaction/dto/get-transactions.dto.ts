@@ -7,10 +7,7 @@ import {
   IsDate,
   IsNumber,
 } from 'class-validator';
-import {
-  TransactionCategory,
-  TransactionDirection,
-} from '@prisma/client';
+import { TransactionCategory, TransactionDirection } from '@prisma/client';
 
 export class GetTransactionsDto {
   @IsOptional()
@@ -20,6 +17,12 @@ export class GetTransactionsDto {
   @IsOptional()
   @IsEnum(TransactionDirection)
   direction?: TransactionDirection;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  group?: number; //Group to make it user friendly but in reality, it is groupId.
 
   @IsOptional()
   @IsDate()
