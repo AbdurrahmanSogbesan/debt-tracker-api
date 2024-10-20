@@ -86,6 +86,9 @@ export class GroupService {
             group: {
               include: {
                 members: {
+                  where: {
+                    isDeleted: false,
+                  },
                   include: {
                     user: {
                       select: {
