@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -63,6 +62,18 @@ export class UserService {
     const user = await this.prisma.user.update({
       where: { supabaseUid },
       data,
+      // !NOTE: include must be same here as findAuthUser
+      include: {
+        memberships: {
+          where: {
+            isDeleted: false,
+          },
+          include: {
+            group: true,
+          },
+        },
+        notifications: true,
+      },
     });
     return user;
   }
