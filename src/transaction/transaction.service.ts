@@ -54,7 +54,7 @@ export class TransactionService {
     // If groupId is present, we'll ignore direction in our where clause
     const transactionWhere: Prisma.TransactionWhereInput = {
       ...commonFilters,
-      ...(groupId && { groupId }),
+      ...(groupId && { groupId, direction: TransactionDirection.OUT }),
       ...(!groupId || filterByPayer ? { payerId: userId } : {}),
       ...(!groupId && direction ? { direction } : {}),
     };
@@ -83,6 +83,7 @@ export class TransactionService {
         where: {
           ...commonFilters,
           groupId,
+          direction: TransactionDirection.OUT,
           ...(filterByPayer ? { payerId: userId } : {}),
         },
         by: ['groupId'],
