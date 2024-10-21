@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
@@ -6,11 +6,9 @@ import {
   Min,
   IsDate,
   IsNumber,
+  IsBoolean,
 } from 'class-validator';
-import {
-  TransactionCategory,
-  TransactionDirection,
-} from '@prisma/client';
+import { TransactionCategory, TransactionDirection } from '@prisma/client';
 
 export class GetTransactionsDto {
   @IsOptional()
@@ -20,6 +18,17 @@ export class GetTransactionsDto {
   @IsOptional()
   @IsEnum(TransactionDirection)
   direction?: TransactionDirection;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  groupId?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  filterByPayer?: boolean;
 
   @IsOptional()
   @IsDate()
