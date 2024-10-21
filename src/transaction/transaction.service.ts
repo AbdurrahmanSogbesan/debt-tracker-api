@@ -18,7 +18,6 @@ export type TransactionTotal =
     };
 
 export interface TransactionSummary {
-  type: 'group' | 'direction' | 'user';
   transactions: Transaction[];
   total: TransactionTotal;
   transactionCount: number;
@@ -92,7 +91,6 @@ export class TransactionService {
       });
 
       return {
-        type: 'group',
         transactions,
         total: totals[0]?._sum.amount ?? 0,
         transactionCount: totals[0]?._count._all ?? 0,
@@ -113,7 +111,6 @@ export class TransactionService {
       });
 
       return {
-        type: 'direction',
         transactions,
         total: totals[0]?._sum.amount ?? 0,
         transactionCount: totals[0]?._count._all ?? 0,
@@ -137,7 +134,6 @@ export class TransactionService {
     );
 
     return {
-      type: 'user',
       transactions,
       total: {
         in: inTotal?._sum.amount ?? 0,
