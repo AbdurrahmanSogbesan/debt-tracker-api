@@ -92,6 +92,7 @@ export class LoanService {
         isAcknowledged: false,
         dueDate: data.dueDate,
         group: groupConnect,
+        status: data.status,
         transactions: {
           create: [
             createTransaction(
