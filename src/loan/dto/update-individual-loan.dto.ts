@@ -17,7 +17,7 @@ import {
   LoanStatus,
 } from '@prisma/client';
 
-export class UpdateLoanDto {
+export class UpdateIndividualLoanDto {
   @IsOptional()
   @IsNumber()
   @Type(() => Number)

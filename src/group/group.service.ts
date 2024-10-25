@@ -123,8 +123,52 @@ export class GroupService {
             isDeleted: false,
           },
           include: {
-            splits: true,
-            loan: true,
+            loan: {
+              where: { isDeleted: false },
+              select: {
+                splits: {
+                  where: { isDeleted: false },
+                  include: {
+                    lender: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                      },
+                    },
+                    borrower: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
+                parent: {
+                  include: {
+                    lender: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                      },
+                    },
+                    borrower: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         creator: true,

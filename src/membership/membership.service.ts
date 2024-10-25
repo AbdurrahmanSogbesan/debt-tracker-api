@@ -28,7 +28,7 @@ export class MembershipService {
     return groupMembership.role === GroupRole.ADMIN;
   }
 
-  private async getGroupWithMembers(
+  async getGroupWithMembers(
     groupId: number,
     extraConditions: Omit<Prisma.GroupWhereInput, 'id'> = {},
     includeOptions: Prisma.GroupInclude = { members: true },
