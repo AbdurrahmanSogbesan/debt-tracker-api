@@ -126,6 +126,7 @@ export class LoanService {
         isAcknowledged: false,
         dueDate: data.dueDate,
         group: data.groupId ? { connect: { id: data.groupId } } : undefined,
+        status: data.status,
         transactions: {
           create: [
             this.createTransactionTemplate(

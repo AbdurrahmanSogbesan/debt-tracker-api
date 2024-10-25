@@ -1,15 +1,8 @@
-import {
-  PrismaClient,
-  GroupRole,
-  LoanStatus,
-  TransactionCategory,
-  TransactionDirection,
-} from '@prisma/client';
+import { PrismaClient, GroupRole } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import * as dotenv from 'dotenv';
 
 const prisma = new PrismaClient();
-
 
 async function seedUsers() {
   const defaultUsers = [
