@@ -156,81 +156,98 @@ export class LoanService {
     });
   }
 
-  async getLoanById(id: number): Promise<Loan | null> {
-    const loan = await this.prisma.loan.findUnique({
-      where: { id, isDeleted: false },
-      include: {
-        lender: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        borrower: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        group: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-          },
-        },
-        splits: {
-          where: { isDeleted: false },
-          include: {
-            lender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            borrower: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-        },
-        parent: {
-          include: {
-            lender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            borrower: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
-    });
+  async getLoanDetails(
+    id: number,
+    includeType: 'single' | 'split' = 'single',
+  ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
+    // Common user selection fields for reusability
+    const userSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+    };
 
-    if (!loan) {
-      throw new NotFoundException(`Loan with ID ${id} not found`);
+    // Common group selection fields
+    const groupSelect = {
+      id: true,
+      name: true,
+      description: true,
+    };
+
+    // Base include object for loan queries
+    const baseInclude = {
+      lender: { select: userSelect },
+      borrower: { select: userSelect },
+      group: { select: groupSelect },
+      transactions: {
+        where: { isDeleted: false },
+      },
+    };
+
+    if (includeType === 'single') {
+      const loan = await this.prisma.loan.findUnique({
+        where: {
+          id,
+          isDeleted: false,
+        },
+        include: {
+          ...baseInclude,
+          splits: {
+            where: { isDeleted: false },
+            include: {
+              lender: { select: userSelect },
+              borrower: { select: userSelect },
+            },
+          },
+          parent: {
+            include: {
+              lender: { select: userSelect },
+              borrower: { select: userSelect },
+            },
+          },
+        },
+      });
+
+      if (!loan) {
+        throw new NotFoundException(`Loan with ID ${id} not found`);
+      }
+
+      return loan;
+    } else {
+      // Handle split loan query
+      const parentLoan = await this.prisma.loan.findUnique({
+        where: {
+          id,
+          isDeleted: false,
+          parentId: null, // Ensure we're getting a parent loan
+        },
+        include: baseInclude,
+      });
+
+      if (!parentLoan) {
+        throw new NotFoundException(`Parent loan with ID ${id} not found`);
+      }
+
+      const splitLoans = await this.prisma.loan.findMany({
+        where: {
+          parentId: id,
+          isDeleted: false,
+        },
+        include: baseInclude,
+      });
+
+      if (splitLoans.length === 0) {
+        throw new NotFoundException(
+          `No split loans found for parent loan ID ${id}`,
+        );
+      }
+
+      return {
+        parent: parentLoan,
+        splits: splitLoans,
+      };
     }
-    return loan;
   }
 
   async updateLoan(
@@ -392,7 +409,7 @@ export class LoanService {
   async createSplitLoan(
     data: SplitLoanInput,
     creatorId: number,
-  ): Promise<Loan> {
+  ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
     const group = await this.membershipService.getGroupWithMembers(
       data.groupId,
       {},
@@ -490,99 +507,7 @@ export class LoanService {
 
     await Promise.all(memberLoansPromises.filter(Boolean));
 
-    return this.getLoanById(parentLoan.id);
-  }
-
-  async getGroupLoanSplits(
-    loanId: number,
-  ): Promise<{ parent: Loan; splits: Loan[] }> {
-    // Get the parent loan first
-    const parentLoan = await this.prisma.loan.findUnique({
-      where: {
-        id: loanId,
-        isDeleted: false,
-        parentId: null, // Ensure we're getting a parent loan
-      },
-      include: {
-        lender: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        borrower: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        group: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-          },
-        },
-        transactions: {
-          where: { isDeleted: false },
-        },
-      },
-    });
-
-    if (!parentLoan) {
-      throw new NotFoundException(`Parent loan with ID ${loanId} not found`);
-    }
-
-    // Get all split loans for this parent
-    const splitLoans = await this.prisma.loan.findMany({
-      where: {
-        parentId: loanId,
-        isDeleted: false,
-      },
-      include: {
-        lender: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        borrower: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        group: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-          },
-        },
-        transactions: {
-          where: { isDeleted: false },
-        },
-      },
-    });
-
-    if (splitLoans.length === 0) {
-      throw new NotFoundException(
-        `No split loans found for parent loan ID ${loanId}`,
-      );
-    }
-
-    return {
-      parent: parentLoan,
-      splits: splitLoans,
-    };
+    return this.getLoanDetails(parentLoan.id, 'split');
   }
 
   async updateSplitLoan(

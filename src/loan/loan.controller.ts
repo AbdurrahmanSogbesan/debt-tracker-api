@@ -51,8 +51,11 @@ export class LoanController {
   }
 
   @Get(':id')
-  async getLoanById(@Param('id') id: number): Promise<Loan | null> {
-    return await this.loanService.getLoanById(+id);
+  async getLoanById(
+    @Param('id') id: number,
+    @Query('type') type: 'single' | 'split' = 'single',
+  ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
+    return await this.loanService.getLoanDetails(+id, type);
   }
 
   @Patch(':id')
@@ -98,7 +101,7 @@ export class LoanController {
   async createSplitLoan(
     @Body() createSplitLoanDto: CreateSplitLoanDto,
     @Request() req,
-  ): Promise<Loan> {
+  ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
     const { id: supabaseUid } = req.user || {};
     const creatorId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
@@ -119,13 +122,6 @@ export class LoanController {
       },
       creatorId,
     );
-  }
-
-  @Get(':id/splits')
-  async getGroupLoanSplits(
-    @Param('id') loanId: number,
-  ): Promise<{ parent: Loan; splits: Loan[] }> {
-    return await this.loanService.getGroupLoanSplits(+loanId);
   }
 
   @Patch(':id/splits')
