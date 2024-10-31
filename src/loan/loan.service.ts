@@ -211,13 +211,6 @@ export class LoanService {
     if (!loan) {
       throw new NotFoundException(`Loan with ID ${id} not found`);
     }
-
-    if (includeType === 'split' && loan.parentId === null) {
-      return {
-        parent: loan,
-        splits: loan.splits || [],
-      };
-    }
     return loan;
   }
 
