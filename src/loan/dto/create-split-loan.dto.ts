@@ -4,7 +4,7 @@ import {
   TransactionDirection,
 } from '@prisma/client';
 
-export interface MemberSplit {
+export interface UserIdMemberSplit {
   userId: number;
   amount: number;
 }
@@ -14,7 +14,7 @@ export interface EmailMemberSplit {
   amount: number;
 }
 
-export type CreateSplitLoanDto = Omit<
+export type CreateSplitLoanRequest = Omit<
   Prisma.LoanCreateInput,
   'memberSplits'
 > & {
@@ -22,7 +22,7 @@ export type CreateSplitLoanDto = Omit<
   memberSplits: EmailMemberSplit[];
 };
 
-export type SplitLoanInput = Prisma.LoanCreateInput & {
+export type CreateSplitLoanDto = Prisma.LoanCreateInput & {
   groupId: number;
-  memberSplits: MemberSplit[];
+  memberSplits: UserIdMemberSplit[];
 };

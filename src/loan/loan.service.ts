@@ -18,16 +18,16 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { LoanCreateInput } from './dto/create-individual-loan.dto';
 import { UpdateIndividualLoanDto } from './dto/update-individual-loan.dto';
-import { SplitLoanInput } from './dto/create-split-loan.dto';
+import { CreateSplitLoanDto } from './dto/create-split-loan.dto';
 import { MembershipService } from 'src/membership/membership.service';
-import { UpdateSplitLoanServiceInput } from './dto/update-split-loan.dto';
+import { UpdateSplitLoanDto } from './dto/update-split-loan.dto';
 
 @Injectable()
 export class LoanService {
-  private membershipService: MembershipService;
-  constructor(private prisma: PrismaService) {
-    this.membershipService = new MembershipService(this.prisma);
-  }
+  constructor(
+    private prisma: PrismaService,
+    private membershipService: MembershipService,
+  ) {}
 
   async getUserByEmail(email: string): Promise<User> {
     const user = await this.prisma.user.findUnique({
@@ -39,7 +39,7 @@ export class LoanService {
     return user;
   }
 
-  async getUserIdsByEmails(emails: string[]): Promise<number[]> {
+  async getUserIdsFromEmails(emails: string[]): Promise<number[]> {
     const users = await this.prisma.user.findMany({
       where: {
         email: {
@@ -61,14 +61,14 @@ export class LoanService {
 
     if (missingEmails.length > 0) {
       throw new NotFoundException(
-        `Users not found for emails: ${missingEmails.join(', ')}`,
+        `Users not found for email(s): ${missingEmails.join(', ')}`,
       );
     }
 
     return users.map((user) => user.id);
   }
 
-  private createTransactionTemplate(
+  private createLoanTransactionTemplate(
     amount: number,
     description: string,
     direction: TransactionDirection,
@@ -129,7 +129,7 @@ export class LoanService {
         status: data.status,
         transactions: {
           create: [
-            this.createTransactionTemplate(
+            this.createLoanTransactionTemplate(
               data.amount,
               data.description,
               TransactionDirection.OUT,
@@ -137,7 +137,7 @@ export class LoanService {
               data.groupId,
               loanTitle,
             ),
-            this.createTransactionTemplate(
+            this.createLoanTransactionTemplate(
               data.amount,
               data.description,
               TransactionDirection.IN,
@@ -160,22 +160,18 @@ export class LoanService {
     id: number,
     includeType: 'single' | 'split' = 'single',
   ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
-    // Common user selection fields for reusability
     const userSelect = {
       id: true,
       firstName: true,
       lastName: true,
       email: true,
     };
-
-    // Common group selection fields
     const groupSelect = {
       id: true,
       name: true,
       description: true,
     };
 
-    // Base include object for loan queries
     const baseInclude = {
       lender: { select: userSelect },
       borrower: { select: userSelect },
@@ -183,71 +179,46 @@ export class LoanService {
       transactions: {
         where: { isDeleted: false },
       },
+      splits:
+        includeType === 'split'
+          ? {
+              where: { isDeleted: false },
+              include: {
+                lender: { select: userSelect },
+                borrower: { select: userSelect },
+              },
+            }
+          : undefined,
+      parent:
+        includeType === 'split'
+          ? {
+              include: {
+                lender: { select: userSelect },
+                borrower: { select: userSelect },
+              },
+            }
+          : undefined,
     };
 
-    if (includeType === 'single') {
-      const loan = await this.prisma.loan.findUnique({
-        where: {
-          id,
-          isDeleted: false,
-        },
-        include: {
-          ...baseInclude,
-          splits: {
-            where: { isDeleted: false },
-            include: {
-              lender: { select: userSelect },
-              borrower: { select: userSelect },
-            },
-          },
-          parent: {
-            include: {
-              lender: { select: userSelect },
-              borrower: { select: userSelect },
-            },
-          },
-        },
-      });
+    const loan = await this.prisma.loan.findUnique({
+      where: {
+        id,
+        isDeleted: false,
+      },
+      include: baseInclude,
+    });
 
-      if (!loan) {
-        throw new NotFoundException(`Loan with ID ${id} not found`);
-      }
+    if (!loan) {
+      throw new NotFoundException(`Loan with ID ${id} not found`);
+    }
 
-      return loan;
-    } else {
-      // Handle split loan query
-      const parentLoan = await this.prisma.loan.findUnique({
-        where: {
-          id,
-          isDeleted: false,
-          parentId: null, // Ensure we're getting a parent loan
-        },
-        include: baseInclude,
-      });
-
-      if (!parentLoan) {
-        throw new NotFoundException(`Parent loan with ID ${id} not found`);
-      }
-
-      const splitLoans = await this.prisma.loan.findMany({
-        where: {
-          parentId: id,
-          isDeleted: false,
-        },
-        include: baseInclude,
-      });
-
-      if (splitLoans.length === 0) {
-        throw new NotFoundException(
-          `No split loans found for parent loan ID ${id}`,
-        );
-      }
-
+    if (includeType === 'split' && loan.parentId === null) {
       return {
-        parent: parentLoan,
-        splits: splitLoans,
+        parent: loan,
+        splits: loan.splits || [],
       };
     }
+    return loan;
   }
 
   async updateLoan(
@@ -361,7 +332,7 @@ export class LoanService {
                 },
               },
             }),
-            create: this.createTransactionTemplate(
+            create: this.createLoanTransactionTemplate(
               loan.amount,
               `${loan.description} (Transferred Loan from ${loan.borrower.firstName})`,
               TransactionDirection.IN,
@@ -407,7 +378,7 @@ export class LoanService {
   }
 
   async createSplitLoan(
-    data: SplitLoanInput,
+    data: CreateSplitLoanDto,
     creatorId: number,
   ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
     const group = await this.membershipService.getGroupWithMembers(
@@ -416,11 +387,9 @@ export class LoanService {
       { members: { where: { isDeleted: false } }, creator: true },
     );
 
+    const groupMemberIds = group.members.map((member) => member.userId);
     const invalidMembers = data.memberSplits.filter(
-      (split) =>
-        !group.members.some(
-          (member) => member.userId === split.userId && !member.isDeleted,
-        ),
+      (split) => !groupMemberIds.includes(split.userId),
     );
 
     if (invalidMembers.length > 0) {
@@ -434,88 +403,79 @@ export class LoanService {
       (sum, split) => sum + split.amount,
       0,
     );
-
     const creatorName = await this.getUserFirstName(creatorId);
-    const parentLoanTitle = `Loan from ${creatorName} to Group`;
-    const parentDescription = `${data.description} (Group Total)`;
 
-    // Create the parent loan with single transaction
+    // Create parent loan with its transaction
     const parentLoan = await this.prisma.loan.create({
       data: {
         amount: totalAmount,
-        description: parentDescription,
+        description: `${data.description} (Group Total)`,
         dueDate: data.dueDate,
         isAcknowledged: false,
         status: LoanStatus.ACTIVE,
         lender: { connect: { id: creatorId } },
-        // borrower: null,
         group: { connect: { id: data.groupId } },
         transactions: {
-          create: this.createTransactionTemplate(
+          create: this.createLoanTransactionTemplate(
             totalAmount,
-            parentDescription,
+            `${data.description} (Group Total)`,
             TransactionDirection.OUT,
             creatorId,
             data.groupId,
-            parentLoanTitle,
+            `Loan from ${creatorName} to Group`,
           ),
         },
       },
     });
 
-    // Create individual loans and their transactions
-    const memberLoansPromises = data.memberSplits.map(async (split) => {
-      if (split.userId === creatorId) return null;
+    // Create member loans (excluding creator)
+    const memberLoans = await Promise.all(
+      data.memberSplits
+        .filter((split) => split.userId !== creatorId)
+        .map(async (split) => {
+          const borrowerName = await this.getUserFirstName(split.userId);
+          const loanTitle = `Loan from ${creatorName} to ${borrowerName}`;
 
-      const borrowerName = await this.getUserFirstName(split.userId);
-      const loanTitle = `Loan from ${creatorName} to ${borrowerName}`;
-
-      return await this.prisma.loan.create({
-        data: {
-          amount: split.amount,
-          description: data.description,
-          dueDate: data.dueDate,
-          isAcknowledged: false,
-          status: LoanStatus.ACTIVE,
-          lender: { connect: { id: creatorId } },
-          borrower: { connect: { id: split.userId } },
-          group: { connect: { id: data.groupId } },
-          parent: { connect: { id: parentLoan.id } },
-          transactions: {
-            create: [
-              this.createTransactionTemplate(
-                split.amount,
-                data.description,
-                TransactionDirection.OUT,
-                creatorId,
-                data.groupId,
-                loanTitle,
-              ),
-              this.createTransactionTemplate(
-                split.amount,
-                data.description,
-                TransactionDirection.IN,
-                split.userId,
-                data.groupId,
-                loanTitle,
-              ),
-            ],
-          },
-        },
-      });
-    });
-
-    await Promise.all(memberLoansPromises.filter(Boolean));
+          return this.prisma.loan.create({
+            data: {
+              amount: split.amount,
+              description: data.description,
+              dueDate: data.dueDate,
+              isAcknowledged: false,
+              status: LoanStatus.ACTIVE,
+              lender: { connect: { id: creatorId } },
+              borrower: { connect: { id: split.userId } },
+              group: { connect: { id: data.groupId } },
+              parent: { connect: { id: parentLoan.id } },
+              transactions: {
+                create: this.createLoanTransactionTemplate(
+                  split.amount,
+                  data.description,
+                  TransactionDirection.IN,
+                  split.userId,
+                  data.groupId,
+                  loanTitle,
+                ),
+              },
+            },
+          });
+        }),
+    );
 
     return this.getLoanDetails(parentLoan.id, 'split');
   }
 
   async updateSplitLoan(
     id: number,
-    data: UpdateSplitLoanServiceInput,
+    data: UpdateSplitLoanDto,
     creatorId: number,
   ): Promise<Loan> {
-    // First verify the loan exists and user has permission to update it
+    // Handle non-split loan updates
+    if (!data.memberSplits?.length) {
+      return this.updateLoan(id, data, creatorId);
+    }
+
+    // Fetch existing loan with necessary relations in one query
     const existingLoan = await this.prisma.loan.findUnique({
       where: {
         id,
@@ -523,13 +483,16 @@ export class LoanService {
         lenderId: creatorId,
       },
       include: {
-        transactions: true,
         group: {
           include: {
             members: {
               where: { isDeleted: false },
             },
           },
+        },
+        splits: {
+          where: { isDeleted: false },
+          include: { transactions: true },
         },
       },
     });
@@ -538,155 +501,138 @@ export class LoanService {
       throw new NotFoundException(`Loan with ID ${id} not found`);
     }
 
-    // If no member splits provided, handle as regular loan update
-    if (!data.memberSplits || data.memberSplits.length === 0) {
-      return this.updateLoan(id, data, creatorId);
-    }
+    // Validate member splits
+    const validMemberIds = new Set(
+      existingLoan.group.members.map((member) => member.userId),
+    );
 
-    // Verify all users are active members of the group
+    // Validate all splits at once
     const invalidMembers = data.memberSplits.filter(
       (split) =>
-        !existingLoan.group.members.some(
-          (member) => member.userId === split.userId && !member.isDeleted,
-        ),
+        !validMemberIds.has(split.userId) || split.userId === creatorId,
     );
 
     if (invalidMembers.length > 0) {
       const invalidUserIds = invalidMembers.map((m) => m.userId).join(', ');
       throw new NotFoundException(
-        `The following users are not active members of this group: ${invalidUserIds}`,
+        `The following users are not valid borrowers: ${invalidUserIds}`,
       );
     }
 
-    // Calculate new total amount
     const totalAmount = data.memberSplits.reduce(
       (sum, split) => sum + split.amount,
       0,
     );
-
     const creatorName = await this.getUserFirstName(creatorId);
-    // const parentLoanTitle = `Loan from ${creatorName} to Group`;
-    const parentDescription = data.description
-      ? `${data.description} (Group Total)`
-      : existingLoan.description;
 
-    // Update the parent loan and its transaction
-    const updatedLoan = await this.prisma.$transaction(async (prisma) => {
-      // Update parent loan
-      const parentLoan = await prisma.loan.update({
-        where: { id },
-        data: {
-          amount: totalAmount,
-          description: parentDescription,
-          dueDate: data.dueDate ?? existingLoan.dueDate,
-          isAcknowledged: data.isAcknowledged ?? existingLoan.isAcknowledged,
-          status: data.status ?? existingLoan.status,
-          transactions: {
-            updateMany: {
-              where: { loanId: id, isDeleted: false },
-              data: {
-                amount: totalAmount,
-                description: parentDescription,
+    const updatedParentLoanId = await this.prisma.$transaction(
+      async (prisma) => {
+        // 1. Update parent loan
+        const updatedParentLoan = await prisma.loan.update({
+          where: { id },
+          data: {
+            amount: totalAmount,
+            description: data.description
+              ? `${data.description} (Group Total)`
+              : existingLoan.description,
+            dueDate: data.dueDate ?? existingLoan.dueDate,
+            isAcknowledged: data.isAcknowledged ?? existingLoan.isAcknowledged,
+            status: data.status ?? existingLoan.status,
+            transactions: {
+              updateMany: {
+                where: { loanId: id, isDeleted: false },
+                data: {
+                  amount: totalAmount,
+                  description: data.description
+                    ? `${data.description} (Group Total)`
+                    : existingLoan.description,
+                },
               },
             },
           },
-        },
-      });
+        });
 
-      // Handle child loans - first get existing ones
-      const existingChildLoans = await prisma.loan.findMany({
-        where: {
-          parentId: id,
-          isDeleted: false,
-        },
-      });
-
-      // Update or create child loans for each member split
-      for (const split of data.memberSplits) {
-        const existingChildLoan = existingChildLoans.find(
-          (loan) => loan.borrowerId === split.userId,
+        // 2. Process all child loans in one go
+        const existingSplitMap = new Map(
+          existingLoan.splits.map((split) => [split.borrowerId, split]),
         );
 
-        const childLoanData = {
-          amount: split.amount,
-          description: data.description ?? existingLoan.description,
-          dueDate: data.dueDate,
-          isAcknowledged:
-            data.isAcknowledged ?? existingChildLoan.isAcknowledged,
-          status: data.status,
-          lenderId: creatorId,
-          borrowerId: split.userId,
-          groupId: existingLoan.groupId,
-          parentId: id,
-          transactions: {
-            updateMany: {
-              where: { loanId: existingChildLoan?.id },
-              data: {
-                amount: split.amount,
-                description: data.description || existingLoan.description,
-              },
-            },
+        // Create/Update child loans
+        await Promise.all(
+          data.memberSplits.map(async (split) => {
+            const existingChildLoan = existingSplitMap.get(split.userId);
+            const borrowerName = await this.getUserFirstName(split.userId);
+            const loanTitle = `Loan from ${creatorName} to ${borrowerName}`;
+
+            if (existingChildLoan) {
+              // Update existing child loan
+              return prisma.loan.update({
+                where: { id: existingChildLoan.id },
+                data: {
+                  amount: split.amount,
+                  description: data.description ?? existingLoan.description,
+                  dueDate: data.dueDate ?? existingLoan.dueDate,
+                  isAcknowledged:
+                    data.isAcknowledged ?? existingChildLoan.isAcknowledged,
+                  status: data.status ?? existingChildLoan.status,
+                  transactions: {
+                    updateMany: {
+                      where: { loanId: existingChildLoan.id, isDeleted: false },
+                      data: {
+                        amount: split.amount,
+                        description:
+                          data.description ?? existingLoan.description,
+                      },
+                    },
+                  },
+                },
+              });
+            } else {
+              // Create new child loan with both transactions
+              return prisma.loan.create({
+                data: {
+                  amount: split.amount,
+                  description: data.description ?? existingLoan.description,
+                  dueDate: data.dueDate ?? existingLoan.dueDate,
+                  isAcknowledged: false,
+                  status: data.status ?? LoanStatus.ACTIVE,
+                  lenderId: creatorId,
+                  borrowerId: split.userId,
+                  groupId: existingLoan.groupId,
+                  parentId: id,
+                  transactions: {
+                    create: this.createLoanTransactionTemplate(
+                      split.amount,
+                      data.description ?? existingLoan.description,
+                      TransactionDirection.IN,
+                      split.userId,
+                      existingLoan.groupId,
+                      loanTitle,
+                    ),
+                  },
+                },
+              });
+            }
+          }),
+        );
+
+        // 3. Soft delete removed splits
+        const updatedUserIds = new Set(
+          data.memberSplits.map((split) => split.userId),
+        );
+        await prisma.loan.updateMany({
+          where: {
+            parentId: id,
+            borrowerId: { notIn: Array.from(updatedUserIds) },
+            isDeleted: false,
           },
-        };
-
-        if (existingChildLoan) {
-          await prisma.loan.update({
-            where: { id: existingChildLoan.id },
-            data: childLoanData,
-          });
-        } else {
-          // Create new child loan with transaction
-          await prisma.loan.create({
-            data: {
-              ...childLoanData,
-              transactions: {
-                create: this.createTransactionTemplate(
-                  split.amount,
-                  data.description || existingLoan.description,
-                  TransactionDirection.OUT,
-                  split.userId,
-                  parentLoan.groupId,
-                  `Loan from ${creatorName}`,
-                ),
-              },
-            },
-          });
-        }
-      }
-
-      // Soft delete any child loans that are no longer needed
-      const updatedUserIds = data.memberSplits.map((split) => split.userId);
-      await prisma.loan.updateMany({
-        where: {
-          parentId: id,
-          borrowerId: {
-            notIn: updatedUserIds,
-          },
-          isDeleted: false,
-        },
-        data: {
-          isDeleted: true,
-        },
-      });
-
-      return parentLoan;
-    });
-
-    return this.prisma.loan.findUnique({
-      where: { id: updatedLoan.id },
-      include: {
-        transactions: true,
-        lender: true,
-        borrower: true,
-        splits: {
-          where: { isDeleted: false },
-          include: {
-            transactions: true,
-            borrower: true,
-          },
-        },
+          data: { isDeleted: true },
+        });
+        return updatedParentLoan.id;
       },
-    });
+    );
+    // 4. Return updated loan with all relations
+    return this.getLoanDetails(updatedParentLoanId, 'split') as Promise<Loan>;
   }
 
   async deleteSplitLoan(id: number, userId: number): Promise<Loan> {
