@@ -374,6 +374,7 @@ export class LoanService {
     data: CreateSplitLoanDto,
     creatorId: number,
   ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
+    // Fetch group and members to validate `memberSplits`
     const group = await this.membershipService.getGroupWithMembers(
       data.groupId,
       {},
@@ -398,64 +399,65 @@ export class LoanService {
     );
     const creatorName = await this.getUserFirstName(creatorId);
 
-    // Create parent loan with its transaction
-    const parentLoan = await this.prisma.loan.create({
-      data: {
-        amount: totalAmount,
-        description: `${data.description} (Group Total)`,
-        dueDate: data.dueDate,
-        isAcknowledged: false,
-        status: LoanStatus.ACTIVE,
-        lender: { connect: { id: creatorId } },
-        group: { connect: { id: data.groupId } },
-        transactions: {
-          create: this.createLoanTransactionTemplate(
-            totalAmount,
-            `${data.description} (Group Total)`,
-            TransactionDirection.OUT,
-            creatorId,
-            data.groupId,
-            `Loan from ${creatorName} to Group`,
-          ),
+    // Use a transaction to create parent loan and splits together
+    const result = await this.prisma.$transaction(async (prisma) => {
+      const parentLoan = await prisma.loan.create({
+        data: {
+          amount: totalAmount,
+          description: `${data.description} (Group Total)`,
+          dueDate: data.dueDate,
+          isAcknowledged: false,
+          status: LoanStatus.ACTIVE,
+          lender: { connect: { id: creatorId } },
+          group: { connect: { id: data.groupId } },
+          transactions: {
+            create: this.createLoanTransactionTemplate(
+              totalAmount,
+              `${data.description} (Group Total)`,
+              TransactionDirection.OUT,
+              creatorId,
+              data.groupId,
+              `Loan from ${creatorName} to Group`,
+            ),
+          },
         },
-      },
-    });
+      });
+      const memberLoans = await Promise.all(
+        data.memberSplits
+          .filter((split) => split.userId !== creatorId)
+          .map(async (split) => {
+            const borrowerName = await this.getUserFirstName(split.userId);
+            const loanTitle = `Loan from ${creatorName} to ${borrowerName}`;
 
-    // Create member loans (excluding creator)
-    const memberLoans = await Promise.all(
-      data.memberSplits
-        .filter((split) => split.userId !== creatorId)
-        .map(async (split) => {
-          const borrowerName = await this.getUserFirstName(split.userId);
-          const loanTitle = `Loan from ${creatorName} to ${borrowerName}`;
-
-          return this.prisma.loan.create({
-            data: {
-              amount: split.amount,
-              description: data.description,
-              dueDate: data.dueDate,
-              isAcknowledged: false,
-              status: LoanStatus.ACTIVE,
-              lender: { connect: { id: creatorId } },
-              borrower: { connect: { id: split.userId } },
-              group: { connect: { id: data.groupId } },
-              parent: { connect: { id: parentLoan.id } },
-              transactions: {
-                create: this.createLoanTransactionTemplate(
-                  split.amount,
-                  data.description,
-                  TransactionDirection.IN,
-                  split.userId,
-                  data.groupId,
-                  loanTitle,
-                ),
+            return prisma.loan.create({
+              data: {
+                amount: split.amount,
+                description: data.description,
+                dueDate: data.dueDate,
+                isAcknowledged: false,
+                status: LoanStatus.ACTIVE,
+                lender: { connect: { id: creatorId } },
+                borrower: { connect: { id: split.userId } },
+                group: { connect: { id: data.groupId } },
+                parent: { connect: { id: parentLoan.id } },
+                transactions: {
+                  create: this.createLoanTransactionTemplate(
+                    split.amount,
+                    data.description,
+                    TransactionDirection.IN,
+                    split.userId,
+                    data.groupId,
+                    loanTitle,
+                  ),
+                },
               },
-            },
-          });
-        }),
-    );
+            });
+          }),
+      );
 
-    return this.getLoanDetails(parentLoan.id, 'split');
+      return parentLoan.id;
+    });
+    return this.getLoanDetails(result, 'split');
   }
 
   async updateSplitLoan(
