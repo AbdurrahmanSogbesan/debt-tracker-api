@@ -59,7 +59,6 @@ model User {
 
   memberships       GroupMembership[]
   transactions      Transaction[]      @relation("PaidBy")
-  transactionSplits TransactionSplit[]
   lentLoans         Loan[]             @relation("Lender")
   borrowedLoans     Loan[]             @relation("Borrower")
   notifications     Notification[]
@@ -122,27 +121,9 @@ model Transaction {
   loan   Loan? @relation(fields: [loanId], references: [id])
   loanId Int?
 
-  splits    TransactionSplit[]
   isDeleted Boolean            @default(false)
 }
 
-model TransactionSplit {
-  id        Int       @id @default(autoincrement())
-  uuid      String    @unique @default(uuid())
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
-  amount    Float
-  isPaid    Boolean
-  paidAt    DateTime? @db.Timestamptz(3)
-
-  transaction   Transaction @relation(fields: [transactionId], references: [id])
-  transactionId Int
-
-  user   User @relation(fields: [userId], references: [id])
-  userId Int
-
-  isDeleted Boolean @default(false)
-}
 model Loan {
   id             Int        @id @default(autoincrement())
   uuid           String     @unique @default(uuid())
@@ -162,11 +143,16 @@ model Loan {
   lender   User @relation("Lender", fields: [lenderId], references: [id])
   lenderId Int
 
-  borrower   User @relation("Borrower", fields: [borrowerId], references: [id])
-  borrowerId Int
+  borrower   User? @relation("Borrower", fields: [borrowerId], references: [id])
+  borrowerId Int?
+
+  parent   Loan?  @relation("LoanSplits", fields: [parentId], references: [id])
+  parentId Int?
+  splits   Loan[] @relation("LoanSplits")
 
   isDeleted Boolean @default(false)
 }
+
 
 
 
