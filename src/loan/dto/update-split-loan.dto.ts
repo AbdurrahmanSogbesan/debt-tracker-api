@@ -5,9 +5,11 @@ import {
   IsNumber,
   ValidateNested,
   IsOptional,
+  IsEnum,
 } from 'class-validator';
 import { UpdateIndividualLoanDto } from './update-individual-loan.dto';
 import { UserIdMemberSplit } from './create-split-loan.dto';
+import { LoanStatus } from '@prisma/client';
 
 class MemberSplitUpdateRequest {
   @IsEmail()
@@ -16,6 +18,10 @@ class MemberSplitUpdateRequest {
   @IsNumber()
   @Type(() => Number)
   amount: number;
+
+  @IsOptional()
+  @IsEnum(LoanStatus)
+  status?: LoanStatus;
 }
 
 export class UpdateSplitLoanRequest extends UpdateIndividualLoanDto {

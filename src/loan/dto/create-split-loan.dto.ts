@@ -1,4 +1,5 @@
 import {
+  LoanStatus,
   Prisma,
   TransactionCategory,
   TransactionDirection,
@@ -7,11 +8,13 @@ import {
 export interface UserIdMemberSplit {
   userId: number;
   amount: number;
+  status?: LoanStatus;
 }
 
 export interface EmailMemberSplit {
   email: string;
   amount: number;
+  status?: LoanStatus;
 }
 
 export type CreateSplitLoanRequest = Omit<

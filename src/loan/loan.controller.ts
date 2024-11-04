@@ -112,6 +112,7 @@ export class LoanController {
       createSplitLoanDto.memberSplits.map((split, index) => ({
         userId: userIds[index],
         amount: split.amount,
+        status: split.status,
       }));
 
     return await this.loanService.createSplitLoan(
@@ -139,6 +140,7 @@ export class LoanController {
       updateSplitLoanDto.memberSplits.map((split, index) => ({
         userId: userIds[index],
         amount: split.amount,
+        status: split.status,
       }));
 
     return await this.loanService.updateSplitLoan(

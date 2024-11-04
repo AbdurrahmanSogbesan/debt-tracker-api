@@ -407,7 +407,7 @@ export class LoanService {
           description: `${data.description} (Group Total)`,
           dueDate: data.dueDate,
           isAcknowledged: false,
-          status: LoanStatus.ACTIVE,
+          status: data.status ?? LoanStatus.ACTIVE,
           lender: { connect: { id: creatorId } },
           group: { connect: { id: data.groupId } },
           transactions: {
@@ -435,7 +435,7 @@ export class LoanService {
                 description: data.description,
                 dueDate: data.dueDate,
                 isAcknowledged: false,
-                status: LoanStatus.ACTIVE,
+                status: split.status ?? LoanStatus.ACTIVE,
                 lender: { connect: { id: creatorId } },
                 borrower: { connect: { id: split.userId } },
                 group: { connect: { id: data.groupId } },
@@ -569,7 +569,7 @@ export class LoanService {
                   dueDate: data.dueDate ?? existingLoan.dueDate,
                   isAcknowledged:
                     data.isAcknowledged ?? existingChildLoan.isAcknowledged,
-                  status: data.status ?? existingChildLoan.status,
+                  status: split.status ?? existingChildLoan.status,
                   transactions: {
                     updateMany: {
                       where: { loanId: existingChildLoan.id, isDeleted: false },
@@ -590,7 +590,7 @@ export class LoanService {
                   description: data.description ?? existingLoan.description,
                   dueDate: data.dueDate ?? existingLoan.dueDate,
                   isAcknowledged: false,
-                  status: data.status ?? LoanStatus.ACTIVE,
+                  status: split.status ?? LoanStatus.ACTIVE,
                   lenderId: creatorId,
                   borrowerId: split.userId,
                   groupId: existingLoan.groupId,
