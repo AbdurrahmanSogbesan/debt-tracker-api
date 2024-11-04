@@ -10,6 +10,6 @@ async function bootstrap() {
   const port = process.env.port || 3000;
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 }
 bootstrap();
