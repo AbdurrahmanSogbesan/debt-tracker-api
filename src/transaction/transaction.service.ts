@@ -192,8 +192,12 @@ export class TransactionService {
       include: {
         loan: {
           include: {
-            lender: { select: { firstName: true, email: true } },
-            borrower: { select: { firstName: true, email: true } },
+            lender: {
+              select: { firstName: true, lastName: true, email: true },
+            },
+            borrower: {
+              select: { firstName: true, lastName: true, email: true },
+            },
             parent: {
               select: {
                 id: true,
@@ -205,9 +209,21 @@ export class TransactionService {
               select: {
                 id: true,
                 amount: true,
-                lender: { select: { id: true, firstName: true, email: true } },
+                lender: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
                 borrower: {
-                  select: { id: true, firstName: true, email: true },
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
                 },
               },
             },
