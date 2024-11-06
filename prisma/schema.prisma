@@ -153,9 +153,6 @@ model Loan {
   isDeleted Boolean @default(false)
 }
 
-
-
-
 model Notification {
   id        Int              @id @default(autoincrement())
   uuid      String           @unique @default(uuid())
