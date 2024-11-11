@@ -210,6 +210,9 @@ export class TransactionService {
             splits: {
               select: {
                 id: true,
+                description: true,
+                status: true,
+                createdAt: true,
                 amount: true,
                 lender: {
                   select: {
