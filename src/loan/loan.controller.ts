@@ -105,16 +105,19 @@ export class LoanController {
     const { id: supabaseUid } = req.user || {};
     const creatorId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    console.log('CREATOR ----> ', creatorId);
+    console.log(createSplitLoanDto);
     const emails = createSplitLoanDto.memberSplits.map((split) => split.email);
+    console.log('EMAILS ----> ', emails);
     const userIds = await this.loanService.getUserIdsFromEmails(emails);
-
+    console.log('USERIDs ----> ', userIds);
     const memberSplits: UserIdMemberSplit[] =
       createSplitLoanDto.memberSplits.map((split, index) => ({
         userId: userIds[index],
         amount: split.amount,
         status: split.status,
       }));
-
+    console.log('MEMBERSPLITS ---->', memberSplits);
     return await this.loanService.createSplitLoan(
       {
         ...createSplitLoanDto,

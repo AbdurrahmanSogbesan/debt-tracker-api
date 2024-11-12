@@ -9,6 +9,9 @@ import { GroupModule } from './group/group.module';
 import { MembershipModule } from './membership/membership.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { LoanModule } from './loan/loan.module';
+import { MailModule } from './mail/mail.module';
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { MailerModule } from '@nestjs-modules/mailer';
 
 @Module({
   imports: [
@@ -20,6 +23,7 @@ import { LoanModule } from './loan/loan.module';
     MembershipModule,
     TransactionModule,
     LoanModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],
