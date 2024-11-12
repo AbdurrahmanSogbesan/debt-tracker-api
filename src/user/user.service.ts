@@ -33,7 +33,24 @@ export class UserService {
             isDeleted: false,
           },
           include: {
-            group: true,
+            group: {
+              include: {
+                members: {
+                  where: {
+                    isDeleted: false,
+                  },
+                  select: {
+                    user: {
+                      select: {
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         notifications: true,
@@ -69,7 +86,24 @@ export class UserService {
             isDeleted: false,
           },
           include: {
-            group: true,
+            group: {
+              include: {
+                members: {
+                  where: {
+                    isDeleted: false,
+                  },
+                  select: {
+                    user: {
+                      select: {
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         notifications: true,

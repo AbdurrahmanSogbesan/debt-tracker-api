@@ -39,7 +39,7 @@ export class LoanService {
     return user;
   }
 
-  async getUserIdsFromEmails(emails: string[]): Promise<number[]> {
+  async getUserIdsFromEmails(emails: string[]) {
     const users = await this.prisma.user.findMany({
       where: {
         email: {
@@ -65,7 +65,13 @@ export class LoanService {
       );
     }
 
-    return users.map((user) => user.id);
+    // Transform array of users into an email -> id mapping
+    const emailToIdMap: Record<string, number> = {};
+    for (const user of users) {
+      emailToIdMap[user.email] = user.id;
+    }
+
+    return emailToIdMap;
   }
 
   private createLoanTransactionTemplate(

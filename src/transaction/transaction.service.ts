@@ -171,7 +171,9 @@ export class TransactionService {
       }
     };
 
-    const loanType = getLoanFilter(loanFilter);
+    // Only apply loan filter if category is LOAN
+    const loanType =
+      category === TransactionCategory.LOAN ? getLoanFilter(loanFilter) : {};
 
     let transactions = await this.prisma.transaction.findMany({
       where: {
@@ -192,8 +194,12 @@ export class TransactionService {
       include: {
         loan: {
           include: {
-            lender: { select: { firstName: true, email: true } },
-            borrower: { select: { firstName: true, email: true } },
+            lender: {
+              select: { firstName: true, lastName: true, email: true },
+            },
+            borrower: {
+              select: { firstName: true, lastName: true, email: true },
+            },
             parent: {
               select: {
                 id: true,
@@ -204,10 +210,25 @@ export class TransactionService {
             splits: {
               select: {
                 id: true,
+                description: true,
+                status: true,
+                createdAt: true,
                 amount: true,
-                lender: { select: { id: true, firstName: true, email: true } },
+                lender: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
                 borrower: {
-                  select: { id: true, firstName: true, email: true },
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
                 },
               },
             },
@@ -219,7 +240,11 @@ export class TransactionService {
       },
     });
 
-    if (loanFilter === LoanFilterType.SPLIT_ONLY) {
+    // Only apply post-filter if category is LOAN
+    if (
+      category === TransactionCategory.LOAN &&
+      loanFilter === LoanFilterType.SPLIT_ONLY
+    ) {
       transactions = transactions.filter((transaction) => {
         const loan = transaction.loan;
         if (!loan) return false;
@@ -236,7 +261,7 @@ export class TransactionService {
         groupId,
         userId,
         filterByPayer,
-        loanType,
+        category === TransactionCategory.LOAN ? loanType : {},
       );
 
       return {
@@ -251,7 +276,7 @@ export class TransactionService {
         commonFilters,
         userId,
         direction,
-        loanType,
+        category === TransactionCategory.LOAN ? loanType : {},
       );
 
       return {
@@ -264,7 +289,7 @@ export class TransactionService {
     const totals = await this.calculateUserTotals(
       commonFilters,
       userId,
-      loanType,
+      category === TransactionCategory.LOAN ? loanType : {},
     );
 
     return {

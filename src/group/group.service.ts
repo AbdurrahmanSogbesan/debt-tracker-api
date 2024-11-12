@@ -220,27 +220,47 @@ export class GroupService {
   }
 
   async delete(id: number, userId: number) {
+    // First check if user has admin rights
     const groupMembership = await this.prisma.groupMembership.findUnique({
       where: {
         groupId_userId: {
           groupId: id,
           userId: userId,
         },
+        role: GroupRole.ADMIN,
         isDeleted: false,
       },
     });
 
-    if (!groupMembership || groupMembership.role !== GroupRole.ADMIN) {
+    if (!groupMembership) {
       throw new ForbiddenException('Only admins can delete the group');
     }
-    const group = await this.prisma.group.update({
-      where: { id },
-      data: {
-        isDeleted: true,
-      },
+
+    // Use transaction to ensure both operations complete successfully
+    const result = await this.prisma.$transaction(async (prisma) => {
+      // Mark all memberships as deleted
+      await prisma.groupMembership.updateMany({
+        where: {
+          groupId: id,
+          isDeleted: false,
+        },
+        data: {
+          isDeleted: true,
+        },
+      });
+
+      // Mark the group as deleted
+      const group = await prisma.group.update({
+        where: { id },
+        data: {
+          isDeleted: true,
+        },
+      });
+
+      return group;
     });
 
-    return group;
+    return result;
   }
 
   async getGroupMembers(groupId: number, userId: number) {
