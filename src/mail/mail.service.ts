@@ -2,7 +2,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SendEmailDto } from './dto/send-email.dto';
 import { MailerService } from '@nestjs-modules/mailer';
-import { SendMailConfig } from './dto/mail.types';
 import { join } from 'path';
 
 @Injectable()
