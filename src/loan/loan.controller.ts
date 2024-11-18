@@ -113,7 +113,6 @@ export class LoanController {
         amount: split.amount,
         status: split.status,
       }));
-
     return await this.loanService.createSplitLoan(
       {
         ...createSplitLoanDto,
