@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SendEmailDto } from './dto/send-email.dto';
-import { MailerService } from '@nestjs-modules/mailer';
+import { ISendMailOptions, MailerService } from '@nestjs-modules/mailer';
 import { join } from 'path';
 
 @Injectable()
@@ -30,7 +30,7 @@ export class MailService implements OnModuleInit {
       const fromName = this.configService.get<string>('MAIL_NAME');
 
       // Base mail options
-      const mailOptions: any = {
+      const mailOptions: Partial<ISendMailOptions> = {
         to: options.recipients,
         from: `${fromName} <${fromEmail}>`,
         subject: options.subject,
