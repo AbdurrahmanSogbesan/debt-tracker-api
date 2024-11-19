@@ -39,11 +39,6 @@ export class GetTransactionsDto {
   @Transform(({ value }) => value === 'true' || value === true)
   filterByPayer?: boolean;
 
-  // @IsOptional()
-  // @IsBoolean()
-  // @Transform(({ value }) => value === 'true' || value === true)
-  // filterByDirection?: boolean;
-
   @IsOptional()
   @IsEnum(LoanStatus)
   @Transform(({ value }) => value || LoanStatus.ACTIVE)
