@@ -4,6 +4,7 @@ import {
   Prisma,
   TransactionCategory,
   TransactionDirection,
+  LoanStatus,
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,13 +34,14 @@ export class TransactionService {
     userId: number,
     filterByPayer: boolean,
     loanFilter: Prisma.TransactionWhereInput,
+    direction?: TransactionDirection,
   ) {
     const totals = await this.prisma.transaction.groupBy({
       where: {
         ...commonFilters,
         ...loanFilter,
         groupId,
-        direction: TransactionDirection.OUT,
+        ...(direction ? { direction } : {}),
         ...(filterByPayer ? { payerId: userId } : {}),
       },
       by: ['groupId'],
@@ -89,12 +91,14 @@ export class TransactionService {
     commonFilters: Prisma.TransactionWhereInput,
     userId: number,
     loanFilter: Prisma.TransactionWhereInput,
+    direction?: TransactionDirection,
   ) {
     const totals = await this.prisma.transaction.groupBy({
       where: {
         ...commonFilters,
         ...loanFilter,
         payerId: userId,
+        ...(direction ? { direction } : {}),
       },
       by: ['direction'],
       _sum: {
@@ -104,6 +108,24 @@ export class TransactionService {
         _all: true,
       },
     });
+
+    if (direction) {
+      const directionTotal = totals.find((t) => t.direction === direction);
+      return {
+        amounts: {
+          in:
+            direction === TransactionDirection.IN
+              ? (directionTotal?._sum.amount ?? 0)
+              : 0,
+          out:
+            direction === TransactionDirection.OUT
+              ? (directionTotal?._sum.amount ?? 0)
+              : 0,
+          total: directionTotal?._sum.amount ?? 0,
+        },
+        count: directionTotal?._count._all ?? 0,
+      };
+    }
 
     const inTotal = totals.find((t) => t.direction === TransactionDirection.IN);
     const outTotal = totals.find(
@@ -133,6 +155,7 @@ export class TransactionService {
       page = 1,
       pageSize = 10,
       filterByPayer = false,
+      loanStatus,
       loanFilter = LoanFilterType.ALL,
     } = params;
 
@@ -151,42 +174,54 @@ export class TransactionService {
 
     const getLoanFilter = (
       filterType: LoanFilterType,
+      status?: LoanStatus,
     ): Prisma.TransactionWhereInput => {
+      const statusCondition = status ? { status } : {};
+
       switch (filterType) {
         case LoanFilterType.SPLIT_ONLY:
           return {
             loan: {
-              OR: [{ splits: { some: {} } }, { parentId: { not: null } }],
+              AND: [
+                { OR: [{ splits: { some: {} } }, { parentId: { not: null } }] },
+                statusCondition,
+              ],
             },
           };
+
         case LoanFilterType.REGULAR:
           return {
             loan: {
-              AND: [{ parentId: null }, { splits: { none: {} } }],
+              AND: [
+                { parentId: null },
+                { splits: { none: {} } },
+                statusCondition,
+              ],
             },
           };
+
         case LoanFilterType.ALL:
         default:
-          return {};
+          return {
+            loan: {
+              ...statusCondition,
+            },
+          };
       }
     };
 
-    // Only apply loan filter if category is LOAN
     const loanType =
-      category === TransactionCategory.LOAN ? getLoanFilter(loanFilter) : {};
+      category === TransactionCategory.LOAN
+        ? getLoanFilter(loanFilter, loanStatus)
+        : {};
 
     let transactions = await this.prisma.transaction.findMany({
       where: {
         ...commonFilters,
         ...loanType,
-        ...(groupId
-          ? {
-              groupId,
-              direction: TransactionDirection.OUT,
-            }
-          : {}),
+        ...(groupId ? { groupId } : {}),
         ...(!groupId || filterByPayer ? { payerId: userId } : {}),
-        ...(!groupId && direction ? { direction } : {}),
+        ...(direction ? { direction } : {}),
       },
       orderBy: { date: 'desc' },
       skip: (page - 1) * pageSize,
@@ -240,7 +275,6 @@ export class TransactionService {
       },
     });
 
-    // Only apply post-filter if category is LOAN
     if (
       category === TransactionCategory.LOAN &&
       loanFilter === LoanFilterType.SPLIT_ONLY
@@ -249,7 +283,7 @@ export class TransactionService {
         const loan = transaction.loan;
         if (!loan) return false;
         if (loan.splits.length > 0) {
-          return transaction.direction === TransactionDirection.OUT; //Parent loans are only in the outward direction.
+          return transaction.direction === TransactionDirection.OUT;
         }
         return true;
       });
@@ -262,6 +296,7 @@ export class TransactionService {
         userId,
         filterByPayer,
         category === TransactionCategory.LOAN ? loanType : {},
+        direction, // Pass the direction parameter here
       );
 
       return {
@@ -290,6 +325,7 @@ export class TransactionService {
       commonFilters,
       userId,
       category === TransactionCategory.LOAN ? loanType : {},
+      direction, // Pass the direction parameter here
     );
 
     return {

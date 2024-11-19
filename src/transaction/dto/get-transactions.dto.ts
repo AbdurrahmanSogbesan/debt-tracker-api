@@ -8,7 +8,11 @@ import {
   IsNumber,
   IsBoolean,
 } from 'class-validator';
-import { TransactionCategory, TransactionDirection } from '@prisma/client';
+import {
+  LoanStatus,
+  TransactionCategory,
+  TransactionDirection,
+} from '@prisma/client';
 
 export enum LoanFilterType {
   ALL = 'ALL', // All loans
@@ -34,6 +38,16 @@ export class GetTransactionsDto {
   @IsBoolean()
   @Transform(({ value }) => value === 'true' || value === true)
   filterByPayer?: boolean;
+
+  // @IsOptional()
+  // @IsBoolean()
+  // @Transform(({ value }) => value === 'true' || value === true)
+  // filterByDirection?: boolean;
+
+  @IsOptional()
+  @IsEnum(LoanStatus)
+  @Transform(({ value }) => value || LoanStatus.ACTIVE)
+  loanStatus?: LoanStatus;
 
   @IsOptional()
   @IsEnum(LoanFilterType)
