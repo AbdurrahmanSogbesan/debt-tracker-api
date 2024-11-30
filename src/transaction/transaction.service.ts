@@ -243,6 +243,9 @@ export class TransactionService {
               },
             },
             splits: {
+              where: {
+                isDeleted: false,
+              },
               select: {
                 id: true,
                 description: true,

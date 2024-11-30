@@ -533,9 +533,7 @@ export class LoanService {
           where: { id },
           data: {
             amount: totalAmount,
-            description: data.description
-              ? `${data.description} (Group Total)`
-              : existingLoan.description,
+            description: data.description ?? existingLoan.description,
             dueDate: data.dueDate ?? existingLoan.dueDate,
             isAcknowledged: data.isAcknowledged ?? existingLoan.isAcknowledged,
             status: data.status ?? existingLoan.status,
@@ -544,9 +542,7 @@ export class LoanService {
                 where: { loanId: id, isDeleted: false },
                 data: {
                   amount: totalAmount,
-                  description: data.description
-                    ? `${data.description} (Group Total)`
-                    : existingLoan.description,
+                  description: data.description ?? existingLoan.description,
                 },
               },
             },
