@@ -5,15 +5,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GroupMembership, Prisma, GroupRole } from '@prisma/client';
+import {
+  GroupMembership,
+  Prisma,
+  GroupRole,
+  InvitationStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class MembershipService {
   constructor(private prisma: PrismaService) {}
-  private async isGroupMemberAdmin(
-    groupId: number,
-    userId: number,
-  ): Promise<boolean> {
+  async isGroupMemberAdmin(groupId: number, userId: number): Promise<boolean> {
     const groupMembership = await this.prisma.groupMembership.findUnique({
       where: {
         groupId_userId: { groupId, userId },
@@ -49,6 +51,26 @@ export class MembershipService {
     return group;
   }
 
+  async getPendingGroupMembers(groupId: number, userId: number) {
+    const isAdmin = await this.isGroupMemberAdmin(groupId, userId);
+    if (!isAdmin) {
+      throw new ForbiddenException(
+        'Only group admins can view pending invitations',
+      );
+    }
+
+    return this.prisma.invitation.findMany({
+      where: {
+        groupId,
+        status: InvitationStatus.ACCEPTED,
+        isExpired: false,
+      },
+      include: {
+        group: true,
+      },
+    });
+  }
+
   async addMember(groupId: number, userId: number, addedByUserId: number) {
     const group = await this.getGroupWithMembers(groupId);
 
@@ -57,22 +79,47 @@ export class MembershipService {
       throw new ForbiddenException('Only admins can add members');
     }
 
-    const existingMembership = group.members.find(
-      (member) => member.userId === userId,
-    );
-
-    if (existingMembership) {
-      if (!existingMembership.isDeleted) {
-        throw new ForbiddenException('User is already a member of this group');
-      }
-      return this.prisma.groupMembership.update({
-        where: { groupId_userId: { groupId, userId } },
-        data: { isDeleted: false, role: GroupRole.MEMBER },
+    return this.prisma.$transaction(async (prisma) => {
+      const invitation = await prisma.invitation.findFirst({
+        where: {
+          groupId,
+          userId,
+          status: InvitationStatus.ACCEPTED,
+        },
       });
-    }
 
-    return this.prisma.groupMembership.create({
-      data: { groupId, userId },
+      if (!invitation) {
+        throw new BadRequestException('No valid invitation found');
+      }
+
+      const existingMembership = group.members.find(
+        (member) => member.userId === userId,
+      );
+
+      if (existingMembership) {
+        if (!existingMembership.isDeleted) {
+          throw new ForbiddenException(
+            'User is already a member of this group',
+          );
+        }
+        return this.prisma.groupMembership.update({
+          where: { groupId_userId: { groupId, userId } },
+          data: { isDeleted: false, role: GroupRole.MEMBER },
+        });
+      }
+
+      // Create membership first
+      const membership = await prisma.groupMembership.create({
+        data: { groupId, userId },
+      });
+
+      // Update invitation status only after successful membership creation
+      await prisma.invitation.update({
+        where: { id: invitation.id },
+        data: { status: InvitationStatus.APPROVED },
+      });
+
+      return membership;
     });
   }
 

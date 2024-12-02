@@ -19,12 +19,17 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  async create(@Body() createUserDto: Prisma.UserCreateInput, @Request() req) {
+  async create(
+    @Body() createUserDto: Prisma.UserCreateInput,
+    @Request() req,
+    @Body('invitationId') invitationId?: number,
+  ) {
     const { email, id: supabaseUid } = req.user || {};
     return await this.userService.create({
       email,
       supabaseUid,
       ...createUserDto,
+      invitationId,
     });
   }
 
@@ -32,6 +37,12 @@ export class UserController {
   async findAuthUser(@Request() req) {
     const { id: supabaseUid } = req.user;
     return await this.userService.findAuthUser(supabaseUid);
+  }
+
+  @Get('invitations')
+  async getUserInvitations(@Request() req) {
+    const { id: supabaseUid } = req.user;
+    return await this.userService.getUserInvitations(supabaseUid);
   }
 
   @Get(':email')
