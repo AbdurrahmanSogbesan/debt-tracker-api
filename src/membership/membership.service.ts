@@ -80,18 +80,6 @@ export class MembershipService {
     }
 
     return this.prisma.$transaction(async (prisma) => {
-      const invitation = await prisma.invitation.findFirst({
-        where: {
-          groupId,
-          userId,
-          status: InvitationStatus.ACCEPTED,
-        },
-      });
-
-      if (!invitation) {
-        throw new BadRequestException('No valid invitation found');
-      }
-
       const existingMembership = group.members.find(
         (member) => member.userId === userId,
       );
@@ -102,24 +90,16 @@ export class MembershipService {
             'User is already a member of this group',
           );
         }
-        return this.prisma.groupMembership.update({
+        return prisma.groupMembership.update({
           where: { groupId_userId: { groupId, userId } },
           data: { isDeleted: false, role: GroupRole.MEMBER },
         });
       }
 
-      // Create membership first
-      const membership = await prisma.groupMembership.create({
+      // Create membership
+      return prisma.groupMembership.create({
         data: { groupId, userId },
       });
-
-      // Update invitation status only after successful membership creation
-      await prisma.invitation.update({
-        where: { id: invitation.id },
-        data: { status: InvitationStatus.APPROVED },
-      });
-
-      return membership;
     });
   }
 

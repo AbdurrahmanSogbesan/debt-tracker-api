@@ -33,22 +33,22 @@ export class MembershipController {
     );
   }
 
-  @Post(':groupId/member')
-  async addMember(
-    @Param('groupId') groupId: number,
-    @Body('userId') userId: number,
-    @Request() req,
-  ) {
-    const { id: supabaseUid } = req.user || {};
-    const addedByUserId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+  // @Post(':groupId/member')
+  // async addMember(
+  //   @Param('groupId') groupId: number,
+  //   @Body('userId') userId: number,
+  //   @Request() req,
+  // ) {
+  //   const { id: supabaseUid } = req.user || {};
+  //   const addedByUserId =
+  //     await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
 
-    return await this.membershipService.addMember(
-      +groupId,
-      userId,
-      addedByUserId,
-    );
-  }
+  //   return await this.membershipService.addMember(
+  //     +groupId,
+  //     userId,
+  //     addedByUserId,
+  //   );
+  // }
 
   @Post(':groupId/leave')
   async leaveGroup(@Param('groupId') groupId: number, @Request() req) {

@@ -35,14 +35,18 @@ export class InvitationService {
     if (!inviter) {
       throw new ForbiddenException('You are not a member of this group');
     }
+
+    const isAdmin = await this.membershipService.isGroupMemberAdmin(
+      groupId,
+      inviterId,
+    );
+    if (!isAdmin) {
+      throw new ForbiddenException('Only admins can send invites!');
+    }
     // Check if user is an existing user
     const isExistingUser = await this.prisma.user.findUnique({
       where: { email },
     });
-    console.log(
-      '🚀 ~ InvitationService ~ createInvitation ~ isExistingUser:',
-      isExistingUser,
-    );
     // Check for existing group member
     const isGroupMember = group.members.find(
       (member) => member.userId === isExistingUser?.id,

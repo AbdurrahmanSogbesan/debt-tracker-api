@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { InvitationStatus, Prisma } from '@prisma/client';
+import { GroupRole, InvitationStatus, Prisma } from '@prisma/client';
 import { InvitationService } from 'src/invitation/invitation.service';
 import { GroupService } from 'src/group/group.service';
 
@@ -38,7 +38,7 @@ export class UserService {
             data: userCreateData,
           });
 
-          // If invitation ID is provided, validate and update
+          // Handle invitation logic, if present
           if (invitationId) {
             const existingInvitation = await prisma.invitation.findUnique({
               where: {
@@ -47,18 +47,28 @@ export class UserService {
                 status: InvitationStatus.PENDING,
                 isExpired: false,
               },
+              include: { group: true },
             });
 
-            if (!existingInvitation) {
+            if (!existingInvitation || existingInvitation.isExpired) {
               throw new BadRequestException('Invalid or expired invitation.');
             }
 
-            // Update invitation to mark as accepted and link to user
+            // Mark the invitation as accepted
             await prisma.invitation.update({
               where: { id: invitationId },
               data: {
                 user: { connect: { id: user.id } },
                 status: InvitationStatus.ACCEPTED,
+              },
+            });
+
+            // Add the user to the group automatically
+            await prisma.groupMembership.create({
+              data: {
+                groupId: existingInvitation.groupId,
+                userId: user.id,
+                role: GroupRole.MEMBER,
               },
             });
           }

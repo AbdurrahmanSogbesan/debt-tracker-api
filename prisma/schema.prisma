@@ -45,8 +45,6 @@ enum NotificationType {
 enum InvitationStatus {
   PENDING
   ACCEPTED
-  REJECTED
-  APPROVED
   DECLINED
 }
 
