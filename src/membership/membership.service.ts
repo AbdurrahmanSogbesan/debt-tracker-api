@@ -51,26 +51,6 @@ export class MembershipService {
     return group;
   }
 
-  async getPendingGroupMembers(groupId: number, userId: number) {
-    const isAdmin = await this.isGroupMemberAdmin(groupId, userId);
-    if (!isAdmin) {
-      throw new ForbiddenException(
-        'Only group admins can view pending invitations',
-      );
-    }
-
-    return this.prisma.invitation.findMany({
-      where: {
-        groupId,
-        status: InvitationStatus.ACCEPTED,
-        isExpired: false,
-      },
-      include: {
-        group: true,
-      },
-    });
-  }
-
   async addMember(groupId: number, userId: number, addedByUserId: number) {
     const group = await this.getGroupWithMembers(groupId);
 
@@ -85,11 +65,13 @@ export class MembershipService {
       );
 
       if (existingMembership) {
+        // If the user is already an active member, throw an exception
         if (!existingMembership.isDeleted) {
           throw new ForbiddenException(
             'User is already a member of this group',
           );
         }
+        // If the user was previously removed, reactivate their membership
         return prisma.groupMembership.update({
           where: { groupId_userId: { groupId, userId } },
           data: { isDeleted: false, role: GroupRole.MEMBER },

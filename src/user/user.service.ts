@@ -23,14 +23,6 @@ export class UserService {
     try {
       const { invitationId, ...userCreateData } = data;
 
-      const existingUser = await this.prisma.user.findUnique({
-        where: { email: userCreateData.email },
-      });
-
-      if (existingUser) {
-        throw new ForbiddenException('User with this email already exists.');
-      }
-
       return this.prisma.$transaction(
         async (prisma) => {
           // Create the user

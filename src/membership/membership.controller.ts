@@ -21,34 +21,22 @@ export class MembershipController {
     private readonly groupService: GroupService,
   ) {}
 
-  @Get(':groupId/pendingMembers')
-  async getPendingMembers(@Param('groupId') groupId: number, @Request() req) {
+  @Post(':groupId/member')
+  async addMember(
+    @Param('groupId') groupId: number,
+    @Body('userId') userId: number,
+    @Request() req,
+  ) {
     const { id: supabaseUid } = req.user || {};
-    const userId =
+    const addedByUserId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
 
-    return await this.membershipService.getPendingGroupMembers(
+    return await this.membershipService.addMember(
       +groupId,
       userId,
+      addedByUserId,
     );
   }
-
-  // @Post(':groupId/member')
-  // async addMember(
-  //   @Param('groupId') groupId: number,
-  //   @Body('userId') userId: number,
-  //   @Request() req,
-  // ) {
-  //   const { id: supabaseUid } = req.user || {};
-  //   const addedByUserId =
-  //     await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
-  //   return await this.membershipService.addMember(
-  //     +groupId,
-  //     userId,
-  //     addedByUserId,
-  //   );
-  // }
 
   @Post(':groupId/leave')
   async leaveGroup(@Param('groupId') groupId: number, @Request() req) {

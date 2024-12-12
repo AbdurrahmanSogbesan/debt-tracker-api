@@ -6,7 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InvitationStatus } from '@prisma/client';
+import { GroupRole, InvitationStatus } from '@prisma/client';
 import { MailService } from 'src/mail/mail.service';
 import { MembershipService } from 'src/membership/membership.service';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -84,7 +84,7 @@ export class InvitationService {
       // Send invitation email
       await this.mailService.sendEmail({
         recipients: email,
-        subject: 'You are Invited to Join Our Group',
+        subject: `You are Invited to Join Our Group; ${group.name}`,
         textBody: `Hi, you've been invited to join the group. Follow the link to accept the invitation.`,
         htmlBody: `<p>Hi, you've been invited to join the group. Follow the link to accept the invitation.</p>`,
       });
@@ -93,17 +93,71 @@ export class InvitationService {
   }
 
   async acceptInvitation(invitationId: number, userId: number) {
+    // Fetch the invitation
     const invitation = await this.prisma.invitation.findUnique({
-      where: { id: invitationId, isExpired: false, isDeleted: false, userId },
+      where: { id: invitationId, isExpired: false, isDeleted: false },
     });
+
     if (!invitation) {
-      throw new BadRequestException('Invalid invitation');
+      throw new BadRequestException('Invalid or expired invitation');
     }
-    return this.prisma.invitation.update({
-      where: { id: invitationId },
-      data: {
-        status: InvitationStatus.ACCEPTED,
-      },
+
+    if (invitation.userId !== userId) {
+      throw new ForbiddenException(
+        'You are not authorized to accept this invitation',
+      );
+    }
+
+    // Use a transaction to ensure both operations succeed together
+    return this.prisma.$transaction(async (prisma) => {
+      // Update invitation status to accepted
+      await prisma.invitation.update({
+        where: { id: invitationId },
+        data: {
+          status: InvitationStatus.ACCEPTED,
+        },
+      });
+
+      // Check if the user is already a member of the group
+      const existingMembership = await prisma.groupMembership.findUnique({
+        where: {
+          groupId_userId: {
+            groupId: invitation.groupId,
+            userId,
+          },
+        },
+      });
+
+      if (existingMembership) {
+        // If the user was previously removed, reactivate their membership
+        if (existingMembership.isDeleted) {
+          return prisma.groupMembership.update({
+            where: {
+              groupId_userId: {
+                groupId: invitation.groupId,
+                userId,
+              },
+            },
+            data: {
+              isDeleted: false,
+              role: GroupRole.MEMBER, // Default role for reactivation
+            },
+          });
+        }
+        // If the user is already active, return a conflict response
+        throw new BadRequestException(
+          'User is already an active member of the group',
+        );
+      }
+
+      // Add the user as a new member of the group
+      return prisma.groupMembership.create({
+        data: {
+          groupId: invitation.groupId,
+          userId,
+          role: GroupRole.MEMBER, // Default role for new members
+        },
+      });
     });
   }
 
@@ -127,9 +181,13 @@ export class InvitationService {
     });
   }
 
-  async getInvitationById(invitationId: number, userId: number) {
+  async getInvitationById(
+    invitationId: number,
+    groupId: number,
+    email: string,
+  ) {
     const invitation = await this.prisma.invitation.findUnique({
-      where: { id: invitationId, userId, isDeleted: false },
+      where: { id: invitationId, groupId, email, isDeleted: false },
     });
     if (!invitation) {
       throw new BadRequestException('Invalid invitation.');
