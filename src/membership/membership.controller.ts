@@ -30,6 +30,7 @@ export class MembershipController {
     const { id: supabaseUid } = req.user || {};
     const addedByUserId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+
     return await this.membershipService.addMember(
       +groupId,
       userId,

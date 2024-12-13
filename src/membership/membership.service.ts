@@ -5,15 +5,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GroupMembership, Prisma, GroupRole } from '@prisma/client';
+import {
+  GroupMembership,
+  Prisma,
+  GroupRole,
+  InvitationStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class MembershipService {
   constructor(private prisma: PrismaService) {}
-  private async isGroupMemberAdmin(
-    groupId: number,
-    userId: number,
-  ): Promise<boolean> {
+  async isGroupMemberAdmin(groupId: number, userId: number): Promise<boolean> {
     const groupMembership = await this.prisma.groupMembership.findUnique({
       where: {
         groupId_userId: { groupId, userId },
@@ -57,22 +59,29 @@ export class MembershipService {
       throw new ForbiddenException('Only admins can add members');
     }
 
-    const existingMembership = group.members.find(
-      (member) => member.userId === userId,
-    );
+    return this.prisma.$transaction(async (prisma) => {
+      const existingMembership = group.members.find(
+        (member) => member.userId === userId,
+      );
 
-    if (existingMembership) {
-      if (!existingMembership.isDeleted) {
-        throw new ForbiddenException('User is already a member of this group');
+      if (existingMembership) {
+        // If the user is already an active member, throw an exception
+        if (!existingMembership.isDeleted) {
+          throw new ForbiddenException(
+            'User is already a member of this group',
+          );
+        }
+        // If the user was previously removed, reactivate their membership
+        return prisma.groupMembership.update({
+          where: { groupId_userId: { groupId, userId } },
+          data: { isDeleted: false, role: GroupRole.MEMBER },
+        });
       }
-      return this.prisma.groupMembership.update({
-        where: { groupId_userId: { groupId, userId } },
-        data: { isDeleted: false, role: GroupRole.MEMBER },
-      });
-    }
 
-    return this.prisma.groupMembership.create({
-      data: { groupId, userId },
+      // Create membership
+      return prisma.groupMembership.create({
+        data: { groupId, userId },
+      });
     });
   }
 

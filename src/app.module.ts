@@ -12,6 +12,7 @@ import { LoanModule } from './loan/loan.module';
 import { MailModule } from './mail/mail.module';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { MailerModule } from '@nestjs-modules/mailer';
+import { InvitationModule } from './invitation/invitation.module';
 import * as path from 'path';
 
 @Module({
@@ -64,6 +65,7 @@ import * as path from 'path';
         preview: false,
       }),
     }),
+    InvitationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
