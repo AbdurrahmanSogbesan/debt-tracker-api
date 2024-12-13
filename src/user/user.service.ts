@@ -23,52 +23,49 @@ export class UserService {
     try {
       const { invitationId, ...userCreateData } = data;
 
-      return this.prisma.$transaction(
-        async (prisma) => {
-          // Create the user
-          const user = await prisma.user.create({
-            data: userCreateData,
+      return this.prisma.$transaction(async (prisma) => {
+        // Create the user
+        const user = await prisma.user.create({
+          data: userCreateData,
+        });
+
+        // Handle invitation logic, if present
+        if (invitationId) {
+          const existingInvitation = await prisma.invitation.findUnique({
+            where: {
+              id: invitationId,
+              email: userCreateData.email,
+              status: InvitationStatus.PENDING,
+              isExpired: false,
+            },
+            include: { group: true },
           });
 
-          // Handle invitation logic, if present
-          if (invitationId) {
-            const existingInvitation = await prisma.invitation.findUnique({
-              where: {
-                id: invitationId,
-                email: userCreateData.email,
-                status: InvitationStatus.PENDING,
-                isExpired: false,
-              },
-              include: { group: true },
-            });
-
-            if (!existingInvitation || existingInvitation.isExpired) {
-              throw new BadRequestException('Invalid or expired invitation.');
-            }
-
-            // Mark the invitation as accepted
-            await prisma.invitation.update({
-              where: { id: invitationId },
-              data: {
-                user: { connect: { id: user.id } },
-                status: InvitationStatus.ACCEPTED,
-              },
-            });
-
-            // Add the user to the group automatically
-            await prisma.groupMembership.create({
-              data: {
-                groupId: existingInvitation.groupId,
-                userId: user.id,
-                role: GroupRole.MEMBER,
-              },
-            });
+          if (!existingInvitation || existingInvitation.isExpired) {
+            throw new BadRequestException('Invalid or expired invitation.');
           }
 
-          return user;
-        },
-        { maxWait: 10000, timeout: 10000 },
-      );
+          // Mark the invitation as accepted
+          await prisma.invitation.update({
+            where: { id: invitationId },
+            data: {
+              user: { connect: { id: user.id } },
+              status: InvitationStatus.ACCEPTED,
+            },
+          });
+
+          // Add the user to the group automatically
+          await prisma.groupMembership.create({
+            data: {
+              groupId: existingInvitation.groupId,
+              userId: user.id,
+              role: GroupRole.MEMBER,
+            },
+          });
+        }
+
+        return user;
+      });
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&

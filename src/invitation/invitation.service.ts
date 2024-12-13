@@ -95,17 +95,11 @@ export class InvitationService {
   async acceptInvitation(invitationId: number, userId: number) {
     // Fetch the invitation
     const invitation = await this.prisma.invitation.findUnique({
-      where: { id: invitationId, isExpired: false, isDeleted: false },
+      where: { id: invitationId, isExpired: false, isDeleted: false, userId },
     });
 
     if (!invitation) {
       throw new BadRequestException('Invalid or expired invitation');
-    }
-
-    if (invitation.userId !== userId) {
-      throw new ForbiddenException(
-        'You are not authorized to accept this invitation',
-      );
     }
 
     // Use a transaction to ensure both operations succeed together

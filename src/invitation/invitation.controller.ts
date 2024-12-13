@@ -15,7 +15,6 @@ import { JwtGuard } from 'src/auth/guard';
 import { CreateInvitationDto } from './dtos/create-invitation.dto';
 import { GetInvitationQueryDto } from './dtos/get-invitation.dto';
 
-@UseGuards(JwtGuard)
 @Controller('invitation')
 export class InvitationController {
   constructor(
@@ -23,6 +22,7 @@ export class InvitationController {
     private readonly groupService: GroupService,
   ) {}
 
+  @UseGuards(JwtGuard)
   @Post()
   async createInvitation(@Body() data: CreateInvitationDto, @Request() req) {
     const { id: supabaseUid } = req.user || {};
@@ -52,6 +52,7 @@ export class InvitationController {
     );
   }
 
+  @UseGuards(JwtGuard)
   @Patch(':invitationId/accept')
   async acceptInvitation(
     @Param('invitationId') invitationId: number,
@@ -63,6 +64,7 @@ export class InvitationController {
     return await this.invitationService.acceptInvitation(+invitationId, userId);
   }
 
+  @UseGuards(JwtGuard)
   @Patch(':invitationId/decline')
   async declineInvitation(
     @Param('invitationId') invitationId: number,
