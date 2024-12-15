@@ -174,40 +174,48 @@ export class TransactionService {
 
     const getLoanFilter = (
       filterType: LoanFilterType,
-      status?: LoanStatus,
+      status?: LoanStatus | 'OVERDUE',
     ): Prisma.TransactionWhereInput => {
-      const statusCondition = status ? { status } : {};
+      const isOverdue = status === 'OVERDUE';
+      const statusCondition = isOverdue
+        ? { dueDate: { lt: new Date() }, status: LoanStatus.ACTIVE }
+        : status
+          ? { status }
+          : undefined;
+
+      let filter: Prisma.TransactionWhereInput;
 
       switch (filterType) {
         case LoanFilterType.SPLIT_ONLY:
-          return {
+          filter = {
             loan: {
               AND: [
                 { OR: [{ splits: { some: {} } }, { parentId: { not: null } }] },
-                statusCondition,
+                ...(statusCondition ? [statusCondition] : []),
               ],
             },
           };
+          break;
 
         case LoanFilterType.REGULAR:
-          return {
+          filter = {
             loan: {
               AND: [
                 { parentId: null },
                 { splits: { none: {} } },
-                statusCondition,
+                ...(statusCondition ? [statusCondition] : []),
               ],
             },
           };
+          break;
 
         case LoanFilterType.ALL:
         default:
-          return {
-            loan: {
-              ...statusCondition,
-            },
-          };
+          filter = statusCondition ? { loan: statusCondition } : {};
+          break;
       }
+
+      return filter;
     };
 
     const loanType =
