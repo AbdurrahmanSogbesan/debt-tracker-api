@@ -35,10 +35,15 @@ enum GroupRole {
 }
 
 enum NotificationType {
-  PAYMENT_DUE
-  LOAN_REMINDER
-  EXPENSE_ADDED
-  BALANCE_UPDATE
+  LOAN_CREATED // ALerts users when they are involved in a loan (Lender/borrower) `This could possibly work for split loans as well`
+  LOAN_REMINDER // The duedate for a loan is coming up (could/should also be used for splits)
+  BALANCE_UPDATE // The amount in a loan/split loan has been updated
+  OVERDUE_ALERT // Loan has passed duedate
+  LOAN_REPAID // Notifies users when a loan is repaid fully or partially.
+  INVITATION_RECEIVED // When a user receives an invitation to join a group
+  INVITATION_ACCEPTED // Alerts group admins when the invitation has been accepted
+  GROUP_ROLE_UPDATED // Notifies a user when their role is updated
+  GROUP_DELETED // Alerts group members when a group is deleted by an admin.
 }
 
 enum InvitationStatus {
@@ -86,6 +91,7 @@ model Group {
   transactions Transaction[]
   loans        Loan[]
   invitations Invitation[]
+  notifications Notification[]
   isDeleted    Boolean           @default(false)
 }
 
@@ -156,6 +162,7 @@ model Loan {
   parent   Loan?  @relation("LoanSplits", fields: [parentId], references: [id])
   parentId Int?
   splits   Loan[] @relation("LoanSplits")
+  notifications Notification[]
 
   isDeleted Boolean @default(false)
 }
@@ -167,10 +174,21 @@ model Notification {
   updatedAt DateTime         @updatedAt @db.Timestamptz(3)
   type      NotificationType
   message   String
-  isRead    Boolean
+  payload   Json?            
+  isRead    Boolean          @default(false)
+  isDeleted Boolean          @default(false)
 
-  users     User[]
-  isDeleted Boolean @default(false)
+  // Relations to other models
+  users      User[]           // Many-to-Many relation with users
+  group      Group?           @relation(fields: [groupId], references: [id])
+  groupId    Int?
+  loan       Loan?            @relation(fields: [loanId], references: [id])
+  loanId     Int?
+  
+  invite     Invitation?      @relation(fields: [inviteId], references: [id])
+  inviteId   Int?
+
+  @@index([type])
 }
 
 model Invitation {
@@ -189,4 +207,6 @@ model Invitation {
   userId Int?
 
   status InvitationStatus @default(PENDING)
+
+  notifications Notification[]
 }
