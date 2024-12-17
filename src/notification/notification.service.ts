@@ -33,6 +33,7 @@ export class NotificationService {
       ...(type && { type }),
       ...(isRead !== undefined && { isRead }),
       ...(groupId ? { groupId } : {}),
+      isDeleted: false,
     };
 
     const totalCount = await this.prisma.notification.count({ where });
@@ -93,6 +94,7 @@ export class NotificationService {
       where: {
         id: notificationId,
         users: { some: { id: userId } },
+        isDeleted: false,
       },
       include: {
         users: true,
@@ -114,6 +116,7 @@ export class NotificationService {
       where: {
         id: notificationId,
         users: { some: { id: userId } },
+        isDeleted: false,
       },
     });
 
@@ -124,6 +127,24 @@ export class NotificationService {
     return this.prisma.notification.update({
       where: { id: notificationId },
       data: { isRead: true },
+    });
+  }
+
+  async deleteNotification(userId: number, notificationId: number) {
+    const notification = await this.prisma.notification.findFirst({
+      where: {
+        id: notificationId,
+        users: { some: { id: userId } },
+      },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    return this.prisma.notification.update({
+      where: { id: notificationId },
+      data: { isDeleted: true },
     });
   }
 }

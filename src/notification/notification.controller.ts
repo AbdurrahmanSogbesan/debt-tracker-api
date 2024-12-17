@@ -66,4 +66,19 @@ export class NotificationController {
       +notificationId,
     );
   }
+
+  @Patch(':id/delete')
+  async deleteNotification(
+    @Request() req,
+    @Param('id') notificationId: number,
+  ) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+
+    return await this.notificationService.deleteNotification(
+      userId,
+      +notificationId,
+    );
+  }
 }
