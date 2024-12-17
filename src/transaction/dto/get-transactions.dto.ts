@@ -7,6 +7,7 @@ import {
   IsDate,
   IsNumber,
   IsBoolean,
+  IsString,
 } from 'class-validator';
 import {
   LoanStatus,
@@ -40,9 +41,9 @@ export class GetTransactionsDto {
   filterByPayer?: boolean;
 
   @IsOptional()
-  @IsEnum(LoanStatus)
-  @Transform(({ value }) => value || LoanStatus.ACTIVE)
-  loanStatus?: LoanStatus;
+  @Transform(({ value }) => value || LoanStatus.ACTIVE) // Default to ACTIVE if no value is provided
+  @IsString({ message: 'loanStatus must be a string' })
+  loanStatus?: LoanStatus | 'OVERDUE';
 
   @IsOptional()
   @IsEnum(LoanFilterType)

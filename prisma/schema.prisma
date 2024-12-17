@@ -27,7 +27,6 @@ enum TransactionDirection {
 enum LoanStatus {
   ACTIVE
   REPAID
-  OVERDUE
 }
 
 enum GroupRole {
