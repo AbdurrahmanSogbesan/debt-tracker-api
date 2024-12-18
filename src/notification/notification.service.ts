@@ -14,7 +14,7 @@ export class NotificationService {
     return this.prisma.notification.create({
       data: {
         ...rest,
-        payload: payload as Prisma.JsonValue, // Cast payload to Prisma.JsonValue
+        payload: payload as Prisma.JsonValue,
         users: {
           connect: userIds.map((id) => ({ id })),
         },
