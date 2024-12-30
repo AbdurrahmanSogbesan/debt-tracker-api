@@ -21,6 +21,7 @@ import { UpdateIndividualLoanDto } from './dto/update-individual-loan.dto';
 import { CreateSplitLoanDto } from './dto/create-split-loan.dto';
 import { MembershipService } from 'src/membership/membership.service';
 import { UpdateSplitLoanDto } from './dto/update-split-loan.dto';
+import { GetChildLoansDto } from './dto/get-child-loans.dto';
 
 @Injectable()
 export class LoanService {
@@ -695,5 +696,81 @@ export class LoanService {
         },
       });
     });
+  }
+
+  async getChildLoans(
+    parentId: number,
+    dto: GetChildLoansDto,
+  ): Promise<{
+    childLoans: Loan[];
+    totalAmount: number;
+    count: number;
+  }> {
+    const { searchQuery, page, pageSize } = dto;
+
+    const userSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+    };
+
+    const filters: Prisma.LoanWhereInput = {
+      parentId,
+      isDeleted: false,
+      ...(searchQuery
+        ? {
+            OR: [
+              {
+                borrower: {
+                  firstName: { contains: searchQuery, mode: 'insensitive' },
+                },
+              },
+              {
+                borrower: {
+                  lastName: { contains: searchQuery, mode: 'insensitive' },
+                },
+              },
+              {
+                borrower: {
+                  email: { contains: searchQuery, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [childLoans, totalAmount, count] = await Promise.all([
+      this.prisma.loan.findMany({
+        where: filters,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          lender: { select: userSelect },
+          borrower: { select: userSelect },
+          transactions: {
+            where: { isDeleted: false },
+          },
+        },
+      }),
+      this.prisma.loan
+        .aggregate({
+          where: filters,
+          _sum: {
+            amount: true,
+          },
+        })
+        .then((res) => res._sum.amount ?? 0),
+      this.prisma.loan.count({
+        where: filters,
+      }),
+    ]);
+
+    return {
+      childLoans,
+      totalAmount,
+      count,
+    };
   }
 }

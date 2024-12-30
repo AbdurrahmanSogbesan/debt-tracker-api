@@ -251,6 +251,7 @@ export class TransactionService {
               },
             },
             splits: {
+              take: 10,
               where: {
                 isDeleted: false,
               },
@@ -264,8 +265,6 @@ export class TransactionService {
                   select: {
                     id: true,
                     firstName: true,
-                    lastName: true,
-                    email: true,
                   },
                 },
                 borrower: {
