@@ -704,7 +704,7 @@ export class LoanService {
   ): Promise<{
     childLoans: Loan[];
     totalAmount: number;
-    childLoanCount: number;
+    count: number;
   }> {
     const { searchQuery, page, pageSize } = dto;
 
@@ -741,7 +741,7 @@ export class LoanService {
         : {}),
     };
 
-    const [childLoans, totalAmount, childLoanCount] = await Promise.all([
+    const [childLoans, totalAmount, count] = await Promise.all([
       this.prisma.loan.findMany({
         where: filters,
         skip: (page - 1) * pageSize,
@@ -770,7 +770,7 @@ export class LoanService {
     return {
       childLoans,
       totalAmount,
-      childLoanCount,
+      count,
     };
   }
 }

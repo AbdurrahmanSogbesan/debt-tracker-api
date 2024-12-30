@@ -170,7 +170,7 @@ export class LoanController {
   ): Promise<{
     childLoans: any[];
     totalAmount: number;
-    childLoanCount: number;
+    count: number;
   }> {
     return this.loanService.getChildLoans(+parentId, dto);
   }
