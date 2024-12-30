@@ -23,6 +23,7 @@ import {
   CreateSplitLoanDto,
 } from './dto/create-split-loan.dto';
 import { UpdateSplitLoanRequest } from './dto/update-split-loan.dto';
+import { GetChildLoansDto } from './dto/get-child-loans.dto';
 
 @UseGuards(JwtGuard)
 @Controller('loan')
@@ -160,5 +161,17 @@ export class LoanController {
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
     return await this.loanService.deleteSplitLoan(+id, userId);
+  }
+
+  @Get(':parentId/child-loans')
+  async getChildLoans(
+    @Param('parentId') parentId: number,
+    @Query() dto: GetChildLoansDto,
+  ): Promise<{
+    childLoans: any[];
+    totalAmount: number;
+    childLoanCount: number;
+  }> {
+    return this.loanService.getChildLoans(+parentId, dto);
   }
 }
