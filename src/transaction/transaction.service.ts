@@ -277,6 +277,13 @@ export class TransactionService {
                 },
               },
             },
+            _count: {
+              select: {
+                splits: {
+                  where: { isDeleted: false },
+                },
+              },
+            },
           },
         },
         payer: {
