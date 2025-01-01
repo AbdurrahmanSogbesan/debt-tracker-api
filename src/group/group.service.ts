@@ -263,22 +263,46 @@ export class GroupService {
     return result;
   }
 
-  async getGroupMembers(groupId: number, userId: number) {
-    const group = await this.prisma.group.findUnique({
-      where: { id: groupId, isDeleted: false },
+  async getGroupMembers(groupId: number, search?: string) {
+    const filters: Prisma.GroupMembershipWhereInput = {
+      isDeleted: false,
+      ...(search
+        ? {
+            user: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const group = await this.prisma.group.findFirst({
+      where: {
+        id: groupId,
+        isDeleted: false,
+      },
       include: {
-        members: { include: { user: true }, where: { isDeleted: false } },
+        members: {
+          where: filters,
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
       },
     });
 
     if (!group) {
       throw new NotFoundException('Group not found');
-    }
-
-    const member = group.members.find((member) => member.userId === userId);
-
-    if (!member) {
-      throw new ForbiddenException('You do not have access to this group');
     }
 
     return group.members;

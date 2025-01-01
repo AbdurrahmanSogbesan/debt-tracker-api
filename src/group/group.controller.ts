@@ -7,6 +7,7 @@ import {
   Get,
   Param,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
 import { JwtGuard } from '../auth/guard';
@@ -52,11 +53,12 @@ export class GroupController {
   }
 
   @Get(':id/members')
-  async getGroupMembers(@Param('id') groupId: number, @Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.groupService.getGroupMembers(+groupId, userId);
+  async getGroupMembers(
+    @Param('id') groupId: number,
+    @Request() req,
+    @Query('search') search?: string,
+  ) {
+    return await this.groupService.getGroupMembers(+groupId, search);
   }
 
   @Patch(':id')
