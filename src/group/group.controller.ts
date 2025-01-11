@@ -12,6 +12,7 @@ import {
 import { GroupService } from './group.service';
 import { JwtGuard } from '../auth/guard';
 import { Prisma } from '@prisma/client';
+import { GetGroupMembersDto } from './dto/get-group-members.dto';
 
 @UseGuards(JwtGuard)
 @Controller('group')
@@ -55,10 +56,9 @@ export class GroupController {
   @Get(':id/members')
   async getGroupMembers(
     @Param('id') groupId: number,
-    @Request() req,
-    @Query('search') search?: string,
+    @Query() query: GetGroupMembersDto,
   ) {
-    return await this.groupService.getGroupMembers(+groupId, search);
+    return await this.groupService.getGroupMembers(+groupId, query);
   }
 
   @Patch(':id')

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Group, Prisma, GroupRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { GetGroupMembersDto } from './dto/get-group-members.dto';
 
 @Injectable()
 export class GroupService {
@@ -263,8 +264,23 @@ export class GroupService {
     return result;
   }
 
-  async getGroupMembers(groupId: number, search?: string) {
+  async getGroupMembers(groupId: number, dto: GetGroupMembersDto) {
+    const { search, page, pageSize } = dto;
+
+    // Check if the group exists
+    const groupExists = await this.prisma.group.findFirst({
+      where: {
+        id: groupId,
+        isDeleted: false,
+      },
+    });
+
+    if (!groupExists) {
+      throw new NotFoundException('Group not found');
+    }
+
     const filters: Prisma.GroupMembershipWhereInput = {
+      groupId,
       isDeleted: false,
       ...(search
         ? {
@@ -279,32 +295,32 @@ export class GroupService {
         : {}),
     };
 
-    const group = await this.prisma.group.findFirst({
-      where: {
-        id: groupId,
-        isDeleted: false,
-      },
+    const members = await this.prisma.groupMembership.findMany({
+      where: filters,
       include: {
-        members: {
-          where: filters,
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
           },
         },
       },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
 
-    if (!group) {
-      throw new NotFoundException('Group not found');
-    }
+    const totalMembers = await this.prisma.groupMembership.count({
+      where: {
+        groupId,
+        isDeleted: false,
+      },
+    });
 
-    return group.members;
+    return {
+      members,
+      totalMembers,
+    };
   }
 }
