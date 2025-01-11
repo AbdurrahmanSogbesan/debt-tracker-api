@@ -321,8 +321,6 @@ export class GroupService {
     return {
       members,
       totalMembers,
-      currentPage: page,
-      pageSize,
     };
   }
 }
