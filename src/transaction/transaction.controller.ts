@@ -14,7 +14,6 @@ import { JwtGuard } from '../auth/guard';
 import { GroupService } from '../group/group.service';
 import { GetTransactionsDto } from './dto/get-transactions.dto';
 import { Transaction } from '@prisma/client';
-import { SearchTransactionsDto } from './dto/search-transactions.dto';
 
 @UseGuards(JwtGuard)
 @Controller('transaction')
@@ -36,23 +35,5 @@ export class TransactionController {
     const transactionsQuery = { ...query, userId };
 
     return this.transactionService.getTransactions(transactionsQuery);
-  }
-
-  @Get('/search')
-  async searchTransactions(
-    @Query() query: SearchTransactionsDto,
-    @Request() req,
-  ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
-    // Merge the validated query params with the userId
-    const searchParams = {
-      ...query,
-      userId,
-    };
-
-    return this.transactionService.searchTransactions(searchParams);
   }
 }

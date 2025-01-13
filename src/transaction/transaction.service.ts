@@ -9,7 +9,6 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GetTransactionsDto, LoanFilterType } from './dto/get-transactions.dto';
-import { SearchTransactionsDto } from './dto/search-transactions.dto';
 
 export type TransactionTotal =
   | number
@@ -158,6 +157,7 @@ export class TransactionService {
       filterByPayer = false,
       loanStatus,
       loanFilter = LoanFilterType.ALL,
+      search,
     } = params;
 
     const commonFilters: Prisma.TransactionWhereInput = {
@@ -169,6 +169,59 @@ export class TransactionService {
               ...(startDate ? { gte: startDate } : {}),
               ...(endDate ? { lte: endDate } : {}),
             },
+          }
+        : {}),
+      ...(search && category === TransactionCategory.LOAN
+        ? {
+            OR: [
+              {
+                description: { contains: search, mode: 'insensitive' },
+              },
+              {
+                loan: {
+                  OR: [
+                    {
+                      lender: {
+                        OR: [
+                          {
+                            firstName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          {
+                            lastName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          { email: { contains: search, mode: 'insensitive' } },
+                        ],
+                      },
+                    },
+                    {
+                      borrower: {
+                        OR: [
+                          {
+                            firstName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          {
+                            lastName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          { email: { contains: search, mode: 'insensitive' } },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
           }
         : {}),
     };
@@ -351,135 +404,5 @@ export class TransactionService {
       total: totals.amounts,
       transactionCount: totals.count,
     };
-  }
-
-  async searchTransactions(
-    params: SearchTransactionsDto & { userId: number },
-  ): Promise<Transaction[]> {
-    const {
-      search,
-      minAmount,
-      maxAmount,
-      userId,
-      page = 1,
-      pageSize = 10,
-    } = params;
-
-    const searchFilter: Prisma.TransactionWhereInput = {
-      isDeleted: false,
-      payerId: userId,
-      OR: [
-        {
-          description: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
-        {
-          payer: {
-            OR: [
-              { firstName: { contains: search, mode: 'insensitive' } },
-              { lastName: { contains: search, mode: 'insensitive' } },
-              { email: { contains: search, mode: 'insensitive' } },
-            ],
-          },
-        },
-        {
-          loan: {
-            OR: [
-              {
-                lender: {
-                  OR: [
-                    { firstName: { contains: search, mode: 'insensitive' } },
-                    { lastName: { contains: search, mode: 'insensitive' } },
-                    { email: { contains: search, mode: 'insensitive' } },
-                  ],
-                },
-              },
-              {
-                borrower: {
-                  OR: [
-                    { firstName: { contains: search, mode: 'insensitive' } },
-                    { lastName: { contains: search, mode: 'insensitive' } },
-                    { email: { contains: search, mode: 'insensitive' } },
-                  ],
-                },
-              },
-            ],
-          },
-        },
-      ],
-      ...(minAmount || maxAmount
-        ? {
-            amount: {
-              ...(minAmount ? { gte: minAmount } : {}),
-              ...(maxAmount ? { lte: maxAmount } : {}),
-            },
-          }
-        : {}),
-    };
-
-    return this.prisma.transaction.findMany({
-      where: searchFilter,
-      orderBy: { date: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        loan: {
-          include: {
-            lender: {
-              select: { firstName: true, lastName: true, email: true },
-            },
-            borrower: {
-              select: { firstName: true, lastName: true, email: true },
-            },
-            parent: {
-              select: {
-                id: true,
-                amount: true,
-                lender: { select: { id: true, firstName: true, email: true } },
-              },
-            },
-            splits: {
-              take: 10,
-              where: {
-                isDeleted: false,
-              },
-              select: {
-                id: true,
-                description: true,
-                status: true,
-                createdAt: true,
-                amount: true,
-                lender: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                  },
-                },
-                borrower: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    email: true,
-                  },
-                },
-              },
-            },
-            _count: {
-              select: {
-                splits: {
-                  where: { isDeleted: false },
-                },
-              },
-            },
-          },
-        },
-        payer: {
-          select: { id: true, firstName: true, email: true },
-        },
-      },
-    });
   }
 }
