@@ -157,6 +157,7 @@ export class TransactionService {
       filterByPayer = false,
       loanStatus,
       loanFilter = LoanFilterType.ALL,
+      search,
     } = params;
 
     const commonFilters: Prisma.TransactionWhereInput = {
@@ -168,6 +169,59 @@ export class TransactionService {
               ...(startDate ? { gte: startDate } : {}),
               ...(endDate ? { lte: endDate } : {}),
             },
+          }
+        : {}),
+      ...(search && category === TransactionCategory.LOAN
+        ? {
+            OR: [
+              {
+                description: { contains: search, mode: 'insensitive' },
+              },
+              {
+                loan: {
+                  OR: [
+                    {
+                      lender: {
+                        OR: [
+                          {
+                            firstName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          {
+                            lastName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          { email: { contains: search, mode: 'insensitive' } },
+                        ],
+                      },
+                    },
+                    {
+                      borrower: {
+                        OR: [
+                          {
+                            firstName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          {
+                            lastName: {
+                              contains: search,
+                              mode: 'insensitive',
+                            },
+                          },
+                          { email: { contains: search, mode: 'insensitive' } },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
           }
         : {}),
     };

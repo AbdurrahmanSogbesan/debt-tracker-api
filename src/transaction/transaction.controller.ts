@@ -29,7 +29,6 @@ export class TransactionController {
     @Request() req,
   ): Promise<TransactionSummary> {
     const { id: supabaseUid } = req.user || {};
-
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
 

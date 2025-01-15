@@ -71,4 +71,8 @@ export class GetTransactionsDto {
   @Min(1)
   @Type(() => Number)
   pageSize?: number = 10;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
