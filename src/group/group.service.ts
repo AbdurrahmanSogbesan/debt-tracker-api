@@ -95,6 +95,7 @@ export class GroupService {
                       select: {
                         firstName: true,
                         lastName: true,
+                        email: true,
                       },
                     },
                   },
