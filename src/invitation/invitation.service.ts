@@ -6,9 +6,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { GroupRole, InvitationStatus } from '@prisma/client';
+import { GroupRole, InvitationStatus, NotificationType } from '@prisma/client';
 import { MailService } from 'src/mail/mail.service';
 import { MembershipService } from 'src/membership/membership.service';
+import { NotificationService } from 'src/notification/notification.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UserService } from 'src/user/user.service';
 
@@ -21,10 +22,18 @@ export class InvitationService {
     private membershipService: MembershipService,
     @Inject(forwardRef(() => UserService))
     private userService: UserService,
+    private notificationService: NotificationService,
   ) {}
 
+  private async getUserFirstName(id: number): Promise<string | undefined> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { firstName: true },
+    });
+    return user?.firstName;
+  }
+
   async createInvitation(groupId: number, email: string, inviterId: number) {
-    // Ensure the inviter is an active member of the group
     const group = await this.membershipService.getGroupWithMembers(
       groupId,
       {},
@@ -43,18 +52,18 @@ export class InvitationService {
     if (!isAdmin) {
       throw new ForbiddenException('Only admins can send invites!');
     }
-    // Check if user is an existing user
+
     const isExistingUser = await this.prisma.user.findUnique({
       where: { email },
     });
-    // Check for existing group member
+
     const isGroupMember = group.members.find(
       (member) => member.userId === isExistingUser?.id,
     );
     if (isGroupMember) {
       throw new ForbiddenException('User is already a member of this group');
     }
-    // Check for existing active invitations
+
     const existingInvitation = await this.prisma.invitation.findFirst({
       where: {
         groupId,
@@ -70,41 +79,64 @@ export class InvitationService {
       );
     }
 
-    // Use a Prisma transaction for atomicity
-    return await this.prisma.$transaction(async (prisma) => {
-      // Create the invitation
-      const invitation = await prisma.invitation.create({
+    // Create invitation and send mail inside transaction
+    const invitation = await this.prisma.$transaction(async (prisma) => {
+      const newInvitation = await prisma.invitation.create({
         data: {
           groupId,
           email,
-          userId: isExistingUser ? isExistingUser?.id : null,
+          userId: isExistingUser ? isExistingUser.id : null,
         },
       });
 
-      // Send invitation email
+      // Send email
       await this.mailService.sendEmail({
         recipients: email,
         subject: `You are Invited to Join Our Group; ${group.name}`,
         textBody: `Hi, you've been invited to join the group. Follow the link to accept the invitation.`,
         htmlBody: `<p>Hi, you've been invited to join the group. Follow the link to accept the invitation.</p>`,
       });
-      return invitation;
+
+      return newInvitation;
     });
+
+    // Add notification for existing user outside the transaction
+    if (isExistingUser) {
+      const inviterName = await this.getUserFirstName(inviterId);
+      await this.notificationService.createNotification({
+        type: NotificationType.INVITATION_RECEIVED,
+        message: `${inviterName} invited you to join the group ${group.name}`,
+        userIds: [isExistingUser.id],
+        payload: {
+          groupId,
+          groupName: group.name,
+          inviterId,
+          invitationId: invitation.id,
+        },
+        groupId,
+        inviteId: invitation.id,
+      });
+    }
+
+    return invitation;
   }
 
   async acceptInvitation(invitationId: number, userId: number) {
     // Fetch the invitation
     const invitation = await this.prisma.invitation.findUnique({
-      where: { id: invitationId, isExpired: false, isDeleted: false, userId },
+      where: { id: invitationId },
+      include: {
+        group: { include: { members: { where: { isDeleted: false } } } },
+      },
     });
 
-    if (!invitation) {
+    if (!invitation || invitation.isExpired || invitation.userId !== userId) {
       throw new BadRequestException('Invalid or expired invitation');
     }
 
-    // Use a transaction to ensure both operations succeed together
-    return this.prisma.$transaction(async (prisma) => {
-      // Update invitation status to accepted
+    // Use a transaction to handle membership updates atomically
+    const groupMembership = await this.prisma.$transaction(async (prisma) => {
+      // Update the invitation status to accepted
       await prisma.invitation.update({
         where: { id: invitationId },
         data: {
@@ -123,7 +155,7 @@ export class InvitationService {
       });
 
       if (existingMembership) {
-        // If the user was previously removed, reactivate their membership
+        // Reactivate membership if previously deleted
         if (existingMembership.isDeleted) {
           return prisma.groupMembership.update({
             where: {
@@ -134,11 +166,12 @@ export class InvitationService {
             },
             data: {
               isDeleted: false,
-              role: GroupRole.MEMBER, // Default role for reactivation
+              role: GroupRole.MEMBER, // Default role for reactivated members
             },
           });
         }
-        // If the user is already active, return a conflict response
+
+        // Throw an error if already an active member
         throw new BadRequestException(
           'User is already an active member of the group',
         );
@@ -153,6 +186,33 @@ export class InvitationService {
         },
       });
     });
+
+    // Send notifications to group admins
+    const groupAdmins = invitation.group.members.filter(
+      (member) => member.role === GroupRole.ADMIN,
+    );
+
+    const adminIds = groupAdmins.map((admin) => admin.userId);
+
+    if (adminIds.length > 0) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      const userName = `${user?.firstName} ${user?.lastName}`.trim();
+
+      await this.notificationService.createNotification({
+        type: NotificationType.INVITATION_ACCEPTED,
+        message: `${userName} has accepted the invitation to join the group ${invitation.group.name}.`,
+        userIds: adminIds,
+        payload: {
+          groupId: invitation.groupId,
+          groupName: invitation.group.name,
+          userId,
+        },
+        groupId: invitation.groupId,
+        inviteId: invitation.id,
+      });
+    }
+
+    return groupMembership;
   }
 
   async declineInvitation(invitationId: number, userId: number) {

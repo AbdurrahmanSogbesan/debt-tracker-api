@@ -1,12 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateNotificationDto } from './dtos/create-notfication.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { FetchNotificationsDto } from './dtos/fetch-notification.dto';
+import { GroupService } from 'src/group/group.service';
 
 @Injectable()
 export class NotificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => GroupService))
+    private readonly groupService: GroupService,
+  ) {}
 
   async createNotification(data: CreateNotificationDto) {
     const { userIds, loanId, groupId, inviteId, payload, ...rest } = data;

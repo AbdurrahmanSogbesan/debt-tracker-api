@@ -13,6 +13,7 @@ import {
   LoanStatus,
   GroupMembership,
   User,
+  NotificationType,
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,12 +23,14 @@ import { CreateSplitLoanDto } from './dto/create-split-loan.dto';
 import { MembershipService } from 'src/membership/membership.service';
 import { UpdateSplitLoanDto } from './dto/update-split-loan.dto';
 import { GetChildLoansDto } from './dto/get-child-loans.dto';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class LoanService {
   constructor(
     private prisma: PrismaService,
     private membershipService: MembershipService,
+    private notificationService: NotificationService,
   ) {}
 
   async getUserByEmail(email: string): Promise<User> {
@@ -124,7 +127,7 @@ export class LoanService {
 
     const loanTitle = `Loan from ${lenderName} to ${borrowerName}`;
 
-    return await this.prisma.loan.create({
+    const loan = await this.prisma.loan.create({
       data: {
         description: data.description,
         amount: data.amount,
@@ -161,6 +164,21 @@ export class LoanService {
         borrower: true,
       },
     });
+
+    // Create the notification for the loan created
+    const notificationMessage = `A new loan has been created between ${lenderName} and ${borrowerName}`;
+    const notificationPayload = { loanId: loan.id, amount: loan.amount };
+
+    await this.notificationService.createNotification({
+      type: NotificationType.LOAN_CREATED,
+      message: notificationMessage,
+      userIds: [lenderId, borrowerId], // Notify both the lender and the borrower
+      payload: notificationPayload,
+      loanId: loan.id, // Link the notification to the loan,
+      groupId: loan?.groupId,
+    });
+
+    return loan;
   }
 
   async getLoanDetails(
@@ -235,7 +253,7 @@ export class LoanService {
       throw new NotFoundException(`Loan with ID ${id} not found`);
     }
 
-    return await this.prisma.loan.update({
+    const result = await this.prisma.loan.update({
       where: { id },
       data: {
         amount: data.amount,
@@ -259,6 +277,62 @@ export class LoanService {
         borrower: true,
       },
     });
+
+    if (data.status === LoanStatus.REPAID) {
+      const lenderName = await this.getUserFirstName(result.lenderId);
+      const borrowerName = await this.getUserFirstName(result.borrowerId);
+
+      // Notification for lender
+      await this.notificationService.createNotification({
+        type: NotificationType.LOAN_REPAID,
+        message: `${borrowerName} has repaid the loan of ${result.amount}`,
+        userIds: [result.lenderId],
+        payload: {
+          loanId: result.id,
+          amount: result.amount,
+          status: result.status,
+          perspective: 'lender',
+        },
+        loanId: result.id,
+        groupId: result?.groupId,
+      });
+
+      // Notification for borrower
+      await this.notificationService.createNotification({
+        type: NotificationType.LOAN_REPAID,
+        message: `You have repaid the loan of ${result.amount} to ${lenderName}`,
+        userIds: [result.borrowerId],
+        payload: {
+          loanId: result.id,
+          amount: result.amount,
+          status: result.status,
+          perspective: 'borrower',
+        },
+        loanId: result.id,
+        groupId: result?.groupId,
+      });
+    }
+
+    // Balance update(loan amount changes) notification
+    if (loan.amount !== result.amount) {
+      const amountDifference = Math.abs(loan.amount - result.amount);
+
+      await this.notificationService.createNotification({
+        type: NotificationType.BALANCE_UPDATE,
+        message: `Loan amount updated from ${loan.amount} to ${result.amount}`,
+        userIds: [result.lenderId, result.borrowerId],
+        payload: {
+          loanId: result.id,
+          oldAmount: loan.amount,
+          newAmount: result.amount,
+          amountDifference: amountDifference,
+        },
+        loanId: result.id,
+        groupId: result?.groupId,
+      });
+    }
+
+    return result;
   }
 
   async transferLoan(
@@ -407,7 +481,7 @@ export class LoanService {
     const creatorName = await this.getUserFirstName(creatorId);
 
     // Use a transaction to create parent loan and splits together
-    const result = await this.prisma.$transaction(async (prisma) => {
+    const parentLoanId = await this.prisma.$transaction(async (prisma) => {
       const parentLoan = await prisma.loan.create({
         data: {
           amount: totalAmount,
@@ -429,6 +503,7 @@ export class LoanService {
           },
         },
       });
+
       const memberLoans = await Promise.all(
         data.memberSplits
           .filter((split) => split.userId !== creatorId)
@@ -464,7 +539,44 @@ export class LoanService {
 
       return parentLoan.id;
     });
-    return this.getLoanDetails(result, 'split');
+
+    // Create notifications after transaction
+    await Promise.all(
+      data.memberSplits
+        .filter((split) => split.userId !== creatorId)
+        .map(async (split) => {
+          const childLoans = await this.prisma.loan.findMany({
+            where: {
+              parentId: parentLoanId,
+              lenderId: creatorId,
+              borrowerId: split.userId,
+            },
+            include: { lender: true, borrower: true },
+          });
+
+          const childLoan = childLoans[0];
+
+          if (childLoan) {
+            const borrowerName = await this.getUserFirstName(split.userId);
+            const notificationMessage = `A new loan of ${split.amount} has been created between ${creatorName} and ${borrowerName}`;
+
+            await this.notificationService.createNotification({
+              type: NotificationType.LOAN_CREATED,
+              message: notificationMessage,
+              userIds: [creatorId, split.userId],
+              payload: {
+                loanId: childLoan.id,
+                amount: split.amount,
+                parentLoanId: parentLoanId,
+              },
+              loanId: childLoan.id,
+              groupId: data.groupId,
+            });
+          }
+        }),
+    );
+
+    return this.getLoanDetails(parentLoanId, 'split');
   }
 
   async updateSplitLoan(

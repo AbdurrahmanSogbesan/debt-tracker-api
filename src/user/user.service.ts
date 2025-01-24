@@ -7,9 +7,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GroupRole, InvitationStatus, Prisma } from '@prisma/client';
+import {
+  GroupRole,
+  InvitationStatus,
+  NotificationType,
+  Prisma,
+} from '@prisma/client';
 import { InvitationService } from 'src/invitation/invitation.service';
 import { GroupService } from 'src/group/group.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class UserService {
@@ -17,64 +23,135 @@ export class UserService {
     private prisma: PrismaService,
     private invitationService: InvitationService,
     private groupService: GroupService,
+    private notificationService: NotificationService,
   ) {}
 
   async create(data: Prisma.UserCreateInput & { invitationId?: number }) {
-    try {
-      const { invitationId, ...userCreateData } = data;
+    const { invitationId, ...userCreateData } = data;
 
-      return this.prisma.$transaction(async (prisma) => {
+    return this.prisma
+      .$transaction(async (prisma) => {
         // Create the user
         const user = await prisma.user.create({
           data: userCreateData,
         });
 
-        // Handle invitation logic, if present
         if (invitationId) {
-          const existingInvitation = await prisma.invitation.findUnique({
+          // Fetch the invitation with necessary group information
+          const invitation = await prisma.invitation.findUnique({
             where: {
               id: invitationId,
               email: userCreateData.email,
               status: InvitationStatus.PENDING,
               isExpired: false,
+              isDeleted: false,
             },
-            include: { group: true },
+            include: {
+              group: {
+                include: { members: { where: { isDeleted: false } } },
+              },
+            },
           });
 
-          if (!existingInvitation || existingInvitation.isExpired) {
+          if (!invitation) {
             throw new BadRequestException('Invalid or expired invitation.');
           }
 
-          // Mark the invitation as accepted
-          await prisma.invitation.update({
-            where: { id: invitationId },
-            data: {
-              user: { connect: { id: user.id } },
-              status: InvitationStatus.ACCEPTED,
-            },
-          });
+          // Use a transaction to handle invitation and membership updates atomically
+          const groupMembership = await this.prisma.$transaction(
+            async (prisma) => {
+              // Mark the invitation as accepted
+              await prisma.invitation.update({
+                where: { id: invitationId },
+                data: {
+                  status: InvitationStatus.ACCEPTED,
+                  user: { connect: { id: user.id } },
+                },
+              });
 
-          // Add the user to the group automatically
-          await prisma.groupMembership.create({
-            data: {
-              groupId: existingInvitation.groupId,
-              userId: user.id,
-              role: GroupRole.MEMBER,
+              // Check if the user is already a member of the group
+              const existingMembership =
+                await prisma.groupMembership.findUnique({
+                  where: {
+                    groupId_userId: {
+                      groupId: invitation.groupId,
+                      userId: user.id,
+                    },
+                  },
+                });
+
+              if (existingMembership) {
+                if (existingMembership.isDeleted) {
+                  // Reactivate membership if previously deleted
+                  return prisma.groupMembership.update({
+                    where: {
+                      groupId_userId: {
+                        groupId: invitation.groupId,
+                        userId: user.id,
+                      },
+                    },
+                    data: {
+                      isDeleted: false,
+                      role: GroupRole.MEMBER, // Default role for reactivated members
+                    },
+                  });
+                }
+
+                throw new BadRequestException(
+                  'User is already an active member of the group.',
+                );
+              }
+
+              // Add the user as a new member of the group
+              return prisma.groupMembership.create({
+                data: {
+                  groupId: invitation.groupId,
+                  userId: user.id,
+                  role: GroupRole.MEMBER, // Default role for new members
+                },
+              });
             },
-          });
+          );
+
+          // Send notifications to group admins
+          const groupAdmins = invitation.group.members.filter(
+            (member) => member.role === GroupRole.ADMIN,
+          );
+
+          const adminIds = groupAdmins.map((admin) => admin.userId);
+
+          if (adminIds.length > 0) {
+            const userName =
+              `${userCreateData.firstName} ${userCreateData.lastName}`.trim();
+
+            await this.notificationService.createNotification({
+              type: NotificationType.INVITATION_ACCEPTED,
+              message: `${userName} has accepted the invitation to join the group "${invitation.group.name}".`,
+              userIds: adminIds,
+              payload: {
+                groupId: invitation.groupId,
+                groupName: invitation.group.name,
+                userId: user.id,
+              },
+              groupId: invitation.groupId,
+              inviteId: invitation.id,
+            });
+          }
+
+          return { user, groupMembership };
         }
 
         return user;
+      })
+      .catch((err) => {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          throw new ForbiddenException('Credentials taken!');
+        }
+        throw err;
       });
-    } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
-        throw new ForbiddenException('Credentials taken!');
-      }
-      throw err;
-    }
   }
 
   async findAuthUser(supabaseUid: string) {

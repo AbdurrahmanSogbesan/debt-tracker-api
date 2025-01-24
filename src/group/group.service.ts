@@ -1,15 +1,30 @@
 import {
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Group, Prisma, GroupRole } from '@prisma/client';
+import { Group, Prisma, GroupRole, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetGroupMembersDto } from './dto/get-group-members.dto';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class GroupService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => NotificationService))
+    private notificationService: NotificationService,
+  ) {}
+
+  private async getUserFirstName(id: number): Promise<string | undefined> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { firstName: true },
+    });
+    return user?.firstName;
+  }
 
   async getUserIdFromSupabaseUid(supabaseUid: string): Promise<number> {
     const user = await this.prisma.user.findUnique({
@@ -238,6 +253,21 @@ export class GroupService {
       throw new ForbiddenException('Only admins can delete the group');
     }
 
+    // Fetch group details and members for notification
+    const group = await this.prisma.group.findUnique({
+      where: { id },
+      include: {
+        members: {
+          where: { isDeleted: false },
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
     // Use transaction to ensure both operations complete successfully
     const result = await this.prisma.$transaction(async (prisma) => {
       // Mark all memberships as deleted
@@ -252,15 +282,30 @@ export class GroupService {
       });
 
       // Mark the group as deleted
-      const group = await prisma.group.update({
+      const deletedGroup = await prisma.group.update({
         where: { id },
         data: {
           isDeleted: true,
         },
       });
 
-      return group;
+      return deletedGroup;
     });
+
+    // Send notifications to all members
+    const memberIds = group.members.map((member) => member.userId);
+    if (memberIds.length > 0) {
+      await this.notificationService.createNotification({
+        type: NotificationType.GROUP_DELETED,
+        message: `The group '${group.name}' has been deleted by an admin.`,
+        userIds: memberIds,
+        payload: {
+          groupId: id,
+          adminId: userId,
+        },
+        groupId: group.id,
+      });
+    }
 
     return result;
   }
