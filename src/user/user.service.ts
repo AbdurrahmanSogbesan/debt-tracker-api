@@ -27,10 +27,10 @@ export class UserService {
   ) {}
 
   async create(data: Prisma.UserCreateInput & { invitationId?: number }) {
-    const { invitationId, ...userCreateData } = data;
+    try {
+      const { invitationId, ...userCreateData } = data;
 
-    return this.prisma
-      .$transaction(async (prisma) => {
+      return await this.prisma.$transaction(async (prisma) => {
         // Create the user
         const user = await prisma.user.create({
           data: userCreateData,
@@ -38,7 +38,7 @@ export class UserService {
 
         if (invitationId) {
           // Fetch the invitation with necessary group information
-          const invitation = await prisma.invitation.findUnique({
+          const invitation = await prisma.invitation.findFirst({
             where: {
               id: invitationId,
               email: userCreateData.email,
@@ -57,61 +57,14 @@ export class UserService {
             throw new BadRequestException('Invalid or expired invitation.');
           }
 
-          // Use a transaction to handle invitation and membership updates atomically
-          const groupMembership = await this.prisma.$transaction(
-            async (prisma) => {
-              // Mark the invitation as accepted
-              await prisma.invitation.update({
-                where: { id: invitationId },
-                data: {
-                  status: InvitationStatus.ACCEPTED,
-                  user: { connect: { id: user.id } },
-                },
-              });
-
-              // Check if the user is already a member of the group
-              const existingMembership =
-                await prisma.groupMembership.findUnique({
-                  where: {
-                    groupId_userId: {
-                      groupId: invitation.groupId,
-                      userId: user.id,
-                    },
-                  },
-                });
-
-              if (existingMembership) {
-                if (existingMembership.isDeleted) {
-                  // Reactivate membership if previously deleted
-                  return prisma.groupMembership.update({
-                    where: {
-                      groupId_userId: {
-                        groupId: invitation.groupId,
-                        userId: user.id,
-                      },
-                    },
-                    data: {
-                      isDeleted: false,
-                      role: GroupRole.MEMBER, // Default role for reactivated members
-                    },
-                  });
-                }
-
-                throw new BadRequestException(
-                  'User is already an active member of the group.',
-                );
-              }
-
-              // Add the user as a new member of the group
-              return prisma.groupMembership.create({
-                data: {
-                  groupId: invitation.groupId,
-                  userId: user.id,
-                  role: GroupRole.MEMBER, // Default role for new members
-                },
-              });
+          // Mark the invitation as accepted
+          await prisma.invitation.update({
+            where: { id: invitationId },
+            data: {
+              status: InvitationStatus.ACCEPTED,
+              user: { connect: { id: user.id } },
             },
-          );
+          });
 
           // Send notifications to group admins
           const groupAdmins = invitation.group.members.filter(
@@ -137,21 +90,19 @@ export class UserService {
               inviteId: invitation.id,
             });
           }
-
-          return { user, groupMembership };
         }
 
         return user;
-      })
-      .catch((err) => {
-        if (
-          err instanceof Prisma.PrismaClientKnownRequestError &&
-          err.code === 'P2002'
-        ) {
-          throw new ForbiddenException('Credentials taken!');
-        }
-        throw err;
       });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ForbiddenException('Credentials taken!');
+      }
+      throw err;
+    }
   }
 
   async findAuthUser(supabaseUid: string) {

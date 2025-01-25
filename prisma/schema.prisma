@@ -35,15 +35,15 @@ enum GroupRole {
 }
 
 enum NotificationType {
-  LOAN_CREATED // ✅
+  LOAN_CREATED 
   LOAN_REMINDER // cron job
-  BALANCE_UPDATE // ✅
+  BALANCE_UPDATE 
   OVERDUE_ALERT // cron job
   LOAN_REPAID // cron job
-  INVITATION_RECEIVED // ✅
-  INVITATION_ACCEPTED // ✅
-  GROUP_ROLE_UPDATED // ✅
-  GROUP_DELETED // ✅
+  INVITATION_RECEIVED 
+  INVITATION_ACCEPTED 
+  GROUP_ROLE_UPDATED 
+  GROUP_DELETED 
 }
 
 enum InvitationStatus {
