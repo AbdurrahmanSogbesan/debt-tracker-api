@@ -10,11 +10,25 @@ import {
   Prisma,
   GroupRole,
   InvitationStatus,
+  NotificationType,
 } from '@prisma/client';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class MembershipService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationService: NotificationService,
+  ) {}
+
+  private async getUserFirstName(id: number): Promise<string | undefined> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { firstName: true },
+    });
+    return user?.firstName;
+  }
+
   async isGroupMemberAdmin(groupId: number, userId: number): Promise<boolean> {
     const groupMembership = await this.prisma.groupMembership.findUnique({
       where: {
@@ -169,10 +183,25 @@ export class MembershipService {
     }
 
     // Update the member's role (promote to admin or demote to member)
-    return this.prisma.groupMembership.update({
+    const updatedMembership = await this.prisma.groupMembership.update({
       where: { groupId_userId: { groupId, userId } },
       data: { role: newRole },
     });
+
+    // Send a notification to the user whose role was updated
+    await this.notificationService.createNotification({
+      type: NotificationType.GROUP_ROLE_UPDATED,
+      message: `Your role in the group '${group.name}' has been updated to ${newRole.toLowerCase()}.`,
+      userIds: [userId],
+      payload: {
+        groupId,
+        updatedByUserId,
+        newRole,
+      },
+      groupId,
+    });
+
+    return updatedMembership;
   }
 
   async leaveGroup(groupId: number, userId: number) {

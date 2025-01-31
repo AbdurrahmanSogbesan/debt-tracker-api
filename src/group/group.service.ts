@@ -1,15 +1,30 @@
 import {
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Group, Prisma, GroupRole } from '@prisma/client';
+import { Group, Prisma, GroupRole, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetGroupMembersDto } from './dto/get-group-members.dto';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class GroupService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => NotificationService))
+    private notificationService: NotificationService,
+  ) {}
+
+  private async getUserFirstName(id: number): Promise<string | undefined> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { firstName: true },
+    });
+    return user?.firstName;
+  }
 
   async getUserIdFromSupabaseUid(supabaseUid: string): Promise<number> {
     const user = await this.prisma.user.findUnique({
@@ -222,20 +237,26 @@ export class GroupService {
   }
 
   async delete(id: number, userId: number) {
-    // First check if user has admin rights
-    const groupMembership = await this.prisma.groupMembership.findUnique({
-      where: {
-        groupId_userId: {
-          groupId: id,
-          userId: userId,
+    // Fetch group details
+    const group = await this.prisma.group.findUnique({
+      where: { id },
+      include: {
+        members: {
+          where: { isDeleted: false },
+          select: { userId: true },
         },
-        role: GroupRole.ADMIN,
-        isDeleted: false,
       },
     });
 
-    if (!groupMembership) {
-      throw new ForbiddenException('Only admins can delete the group');
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    // Check if the user is the group creator
+    if (group.creatorId !== userId) {
+      throw new ForbiddenException(
+        'Only the group creator can delete the group',
+      );
     }
 
     // Use transaction to ensure both operations complete successfully
@@ -252,15 +273,33 @@ export class GroupService {
       });
 
       // Mark the group as deleted
-      const group = await prisma.group.update({
+      const deletedGroup = await prisma.group.update({
         where: { id },
         data: {
           isDeleted: true,
         },
       });
 
-      return group;
+      return deletedGroup;
     });
+
+    // Send notifications to all members
+    const memberIds = group.members
+      .map((member) => member.userId)
+      .filter((id) => id !== userId);
+
+    if (memberIds.length > 0) {
+      await this.notificationService.createNotification({
+        type: NotificationType.GROUP_DELETED,
+        message: `The group '${group.name}' has been deleted by the creator.`,
+        userIds: memberIds,
+        payload: {
+          groupId: id,
+          creatorId: userId,
+        },
+        groupId: group.id,
+      });
+    }
 
     return result;
   }

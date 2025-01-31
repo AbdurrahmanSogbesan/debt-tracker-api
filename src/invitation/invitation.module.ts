@@ -5,10 +5,11 @@ import { UserModule } from 'src/user/user.module';
 import { MailModule } from 'src/mail/mail.module';
 import { MembershipModule } from 'src/membership/membership.module';
 import { GroupModule } from 'src/group/group.module';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Module({
   controllers: [InvitationController],
-  providers: [InvitationService],
+  providers: [InvitationService, NotificationService],
   exports: [InvitationService],
   imports: [
     forwardRef(() => UserModule),

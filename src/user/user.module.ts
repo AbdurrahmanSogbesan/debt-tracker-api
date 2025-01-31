@@ -6,11 +6,18 @@ import { GroupService } from 'src/group/group.service';
 import { MailService } from 'src/mail/mail.service';
 import { MailModule } from 'src/mail/mail.module';
 import { InvitationModule } from 'src/invitation/invitation.module';
+import { GroupModule } from 'src/group/group.module';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   controllers: [UserController],
-  providers: [UserService, GroupService],
+  providers: [UserService],
   exports: [UserService],
-  imports: [MailModule, forwardRef(() => InvitationModule)],
+  imports: [
+    MailModule,
+    forwardRef(() => InvitationModule),
+    forwardRef(() => GroupModule),
+    NotificationModule,
+  ],
 })
 export class UserModule {}

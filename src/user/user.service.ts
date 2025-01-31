@@ -7,9 +7,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GroupRole, InvitationStatus, Prisma } from '@prisma/client';
+import {
+  GroupRole,
+  InvitationStatus,
+  NotificationType,
+  Prisma,
+} from '@prisma/client';
 import { InvitationService } from 'src/invitation/invitation.service';
 import { GroupService } from 'src/group/group.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class UserService {
@@ -17,31 +23,37 @@ export class UserService {
     private prisma: PrismaService,
     private invitationService: InvitationService,
     private groupService: GroupService,
+    private notificationService: NotificationService,
   ) {}
 
   async create(data: Prisma.UserCreateInput & { invitationId?: number }) {
     try {
       const { invitationId, ...userCreateData } = data;
 
-      return this.prisma.$transaction(async (prisma) => {
+      return await this.prisma.$transaction(async (prisma) => {
         // Create the user
         const user = await prisma.user.create({
           data: userCreateData,
         });
 
-        // Handle invitation logic, if present
         if (invitationId) {
-          const existingInvitation = await prisma.invitation.findUnique({
+          // Fetch the invitation with necessary group information
+          const invitation = await prisma.invitation.findFirst({
             where: {
               id: invitationId,
               email: userCreateData.email,
               status: InvitationStatus.PENDING,
               isExpired: false,
+              isDeleted: false,
             },
-            include: { group: true },
+            include: {
+              group: {
+                include: { members: { where: { isDeleted: false } } },
+              },
+            },
           });
 
-          if (!existingInvitation || existingInvitation.isExpired) {
+          if (!invitation) {
             throw new BadRequestException('Invalid or expired invitation.');
           }
 
@@ -49,19 +61,35 @@ export class UserService {
           await prisma.invitation.update({
             where: { id: invitationId },
             data: {
-              user: { connect: { id: user.id } },
               status: InvitationStatus.ACCEPTED,
+              user: { connect: { id: user.id } },
             },
           });
 
-          // Add the user to the group automatically
-          await prisma.groupMembership.create({
-            data: {
-              groupId: existingInvitation.groupId,
-              userId: user.id,
-              role: GroupRole.MEMBER,
-            },
-          });
+          // Send notifications to group admins
+          const groupAdmins = invitation.group.members.filter(
+            (member) => member.role === GroupRole.ADMIN,
+          );
+
+          const adminIds = groupAdmins.map((admin) => admin.userId);
+
+          if (adminIds.length > 0) {
+            const userName =
+              `${userCreateData.firstName} ${userCreateData.lastName}`.trim();
+
+            await this.notificationService.createNotification({
+              type: NotificationType.INVITATION_ACCEPTED,
+              message: `${userName} has accepted the invitation to join the group "${invitation.group.name}".`,
+              userIds: adminIds,
+              payload: {
+                groupId: invitation.groupId,
+                groupName: invitation.group.name,
+                userId: user.id,
+              },
+              groupId: invitation.groupId,
+              inviteId: invitation.id,
+            });
+          }
         }
 
         return user;
