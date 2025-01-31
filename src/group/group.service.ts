@@ -237,23 +237,7 @@ export class GroupService {
   }
 
   async delete(id: number, userId: number) {
-    // First check if user has admin rights
-    const groupMembership = await this.prisma.groupMembership.findUnique({
-      where: {
-        groupId_userId: {
-          groupId: id,
-          userId: userId,
-        },
-        role: GroupRole.ADMIN,
-        isDeleted: false,
-      },
-    });
-
-    if (!groupMembership) {
-      throw new ForbiddenException('Only admins can delete the group');
-    }
-
-    // Fetch group details and members for notification
+    // Fetch group details
     const group = await this.prisma.group.findUnique({
       where: { id },
       include: {
@@ -266,6 +250,13 @@ export class GroupService {
 
     if (!group) {
       throw new NotFoundException('Group not found');
+    }
+
+    // Check if the user is the group creator
+    if (group.creatorId !== userId) {
+      throw new ForbiddenException(
+        'Only the group creator can delete the group',
+      );
     }
 
     // Use transaction to ensure both operations complete successfully
@@ -293,15 +284,18 @@ export class GroupService {
     });
 
     // Send notifications to all members
-    const memberIds = group.members.map((member) => member.userId);
+    const memberIds = group.members
+      .map((member) => member.userId)
+      .filter((id) => id !== userId);
+
     if (memberIds.length > 0) {
       await this.notificationService.createNotification({
         type: NotificationType.GROUP_DELETED,
-        message: `The group '${group.name}' has been deleted by an admin.`,
+        message: `The group '${group.name}' has been deleted by the creator.`,
         userIds: memberIds,
         payload: {
           groupId: id,
-          adminId: userId,
+          creatorId: userId,
         },
         groupId: group.id,
       });

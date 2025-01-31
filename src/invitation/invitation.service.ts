@@ -105,7 +105,7 @@ export class InvitationService {
       const inviterName = await this.getUserFirstName(inviterId);
       await this.notificationService.createNotification({
         type: NotificationType.INVITATION_RECEIVED,
-        message: `${inviterName} invited you to join the group ${group.name}`,
+        message: `${inviterName} has invited you to join "${group.name}". Tap to view the invitation.`,
         userIds: [isExistingUser.id],
         payload: {
           groupId,
