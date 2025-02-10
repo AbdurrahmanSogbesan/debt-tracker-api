@@ -9,9 +9,6 @@ export class AppController {
 
   @Get()
   getHello(): string {
-    logger.log('This is an info log'); // Info log
-    logger.warn('This is a warning log'); // Warning log
-    logger.error('This is an error log'); // Error log
     return this.appService.getHello();
   }
 }
