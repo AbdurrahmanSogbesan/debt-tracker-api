@@ -93,7 +93,7 @@ export class InvitationService {
       await this.mailService.sendEmail({
         recipients: email,
         subject: `You are Invited to Join Our Group; ${group.name}`,
-        textBody: `Hi, you've been invited to join the group. Follow the link to accept the invitation.`,
+        textBody: `Hi, you've been invited to join the group. Follow the link to accept the invitation. ${process.env.FRONTEND_URL}`,
         htmlBody: `<p>Hi, you've been invited to join the group. Follow the link to accept the invitation.</p>`,
       });
 
