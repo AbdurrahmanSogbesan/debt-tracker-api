@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   GroupRole,
   InvitationStatus,
+  LoanStatus,
   NotificationType,
   Prisma,
 } from '@prisma/client';
@@ -25,6 +26,35 @@ export class UserService {
     private groupService: GroupService,
     private notificationService: NotificationService,
   ) {}
+
+  async getLoanStats(where: any) {
+    const statusCounts = await this.prisma.loan.groupBy({
+      by: ['status'],
+      where: { ...where, isDeleted: false },
+      _count: true,
+      _sum: { amount: true },
+    });
+
+    const result = {
+      totalAmount: 0,
+      activeLoans: 0,
+      paidLoans: 0,
+      totalLoans: 0,
+    };
+
+    statusCounts.forEach((stat) => {
+      result.totalAmount += Number(stat._sum.amount) || 0;
+      result.totalLoans += stat._count;
+
+      if (stat.status === LoanStatus.ACTIVE) {
+        result.activeLoans = stat._count;
+      } else if (stat.status === LoanStatus.REPAID) {
+        result.paidLoans = stat._count;
+      }
+    });
+
+    return result;
+  }
 
   async create(data: Prisma.UserCreateInput & { invitationId?: number }) {
     try {
@@ -209,5 +239,40 @@ export class UserService {
     return await this.prisma.invitation.findMany({
       where: { userId: user },
     });
+  }
+
+  async getUserStats(userId: number) {
+    // Get all group IDs the user belongs to
+    const groupMemberships = await this.prisma.groupMembership.findMany({
+      where: { userId, isDeleted: false },
+      select: { groupId: true },
+    });
+    const groupIds = groupMemberships.map((g) => g.groupId);
+
+    // Get stats for all loans involving the user (as borrower or lender)
+    const userLoanStats = await this.getLoanStats({
+      OR: [{ borrowerId: userId }, { lenderId: userId }],
+    });
+
+    // Get stats for all loans in user's groups (if any)
+    const groupLoanStats =
+      groupIds.length > 0
+        ? await this.getLoanStats({
+            groupId: { in: groupIds },
+            OR: [{ borrowerId: userId }, { lenderId: userId }],
+          })
+        : { totalAmount: 0, activeLoans: 0, paidLoans: 0, totalLoans: 0 };
+
+    return {
+      totalLoanedOut: userLoanStats.totalAmount,
+      totalLoanedIn: userLoanStats.totalAmount,
+      activeLoans: userLoanStats.activeLoans,
+      paidLoans: userLoanStats.paidLoans,
+      groupsBelongedTo: groupIds.length,
+      groupLoans: groupLoanStats.totalLoans,
+      groupLoanAmount: groupLoanStats.totalAmount,
+      activeGroupLoans: groupLoanStats.activeLoans,
+      paidGroupLoans: groupLoanStats.paidLoans,
+    };
   }
 }

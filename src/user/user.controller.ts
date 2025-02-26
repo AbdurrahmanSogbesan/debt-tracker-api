@@ -12,11 +12,15 @@ import {
 import { UserService } from './user.service';
 import { Prisma } from '@prisma/client';
 import { JwtGuard } from '../auth/guard';
+import { GroupService } from 'src/group/group.service';
 
 @UseGuards(JwtGuard)
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly groupService: GroupService,
+  ) {}
 
   @Post()
   async create(
@@ -37,6 +41,15 @@ export class UserController {
   async findAuthUser(@Request() req) {
     const { id: supabaseUid } = req.user;
     return await this.userService.findAuthUser(supabaseUid);
+  }
+
+  @Get('stats')
+  async getStats(@Request() req) {
+    const { id: supabaseUid } = req.user;
+
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    return await this.userService.getUserStats(userId);
   }
 
   @Get('invitations')
