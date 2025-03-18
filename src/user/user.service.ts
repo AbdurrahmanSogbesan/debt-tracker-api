@@ -58,12 +58,16 @@ export class UserService {
     return result;
   }
 
-  async create(data: Prisma.UserCreateInput & { invitationId?: number }) {
+  async create(
+    data: Prisma.UserCreateInput & {
+      invitationId?: number;
+      syncLoans?: boolean;
+    },
+  ) {
     try {
-      const { invitationId, ...userCreateData } = data;
+      const { invitationId, syncLoans = false, ...userCreateData } = data;
 
       return await this.prisma.$transaction(async (prisma) => {
-        // Create the user
         const user = await prisma.user.create({
           data: userCreateData,
         });
@@ -124,111 +128,113 @@ export class UserService {
           }
         }
 
-        // Find and link pending loans where this user is a borrower
-        const pendingBorrowerLoans = await prisma.loan.findMany({
-          where: {
-            borrowerEmail: userCreateData.email,
-            borrowerId: null,
-            isDeleted: false,
-          },
-          include: {
-            lender: true,
-          },
-        });
+        // Only process loans if syncLoans is true
+        if (syncLoans) {
+          const pendingBorrowerLoans = await prisma.loan.findMany({
+            where: {
+              borrowerEmail: userCreateData.email,
+              borrowerId: null,
+              isDeleted: false,
+            },
+            include: {
+              lender: true,
+            },
+          });
 
-        // Find and link pending loans where this user is a lender
-        const pendingLenderLoans = await prisma.loan.findMany({
-          where: {
-            lenderEmail: userCreateData.email,
-            lenderId: null,
-            isDeleted: false,
-          },
-          include: {
-            borrower: true,
-          },
-        });
+          // Find and link pending loans where this user is a lender
+          const pendingLenderLoans = await prisma.loan.findMany({
+            where: {
+              lenderEmail: userCreateData.email,
+              lenderId: null,
+              isDeleted: false,
+            },
+            include: {
+              borrower: true,
+            },
+          });
 
-        // Process borrower loans
-        if (pendingBorrowerLoans.length > 0) {
-          await Promise.all(
-            pendingBorrowerLoans.map(async (loan) => {
-              await prisma.loan.update({
-                where: { id: loan.id },
-                data: {
-                  borrower: { connect: { id: user.id } },
-                  borrowerEmail: null,
-                  isAcknowledged: loan.lenderId ? true : false,
-                  // Create the "IN" transaction for the borrower
-                  transactions: {
-                    create: [
-                      {
-                        amount: loan.amount,
-                        description: loan.description,
-                        direction: TransactionDirection.IN,
-                        date: new Date(),
-                        title: `Loan from ${loan.lender?.firstName || loan.lenderEmail || 'Someone'} to ${userCreateData.firstName}`,
-                        category: TransactionCategory.LOAN,
-                        payer: { connect: { id: user.id } },
-                      },
-                    ],
+          // Process borrower loans
+          if (pendingBorrowerLoans.length > 0) {
+            await Promise.all(
+              pendingBorrowerLoans.map(async (loan) => {
+                await prisma.loan.update({
+                  where: { id: loan.id },
+                  data: {
+                    borrower: { connect: { id: user.id } },
+                    borrowerEmail: null,
+                    isAcknowledged: loan.lenderId ? true : false,
+                    // Create the "IN" transaction for the borrower
+                    transactions: {
+                      create: [
+                        {
+                          amount: loan.amount,
+                          description: loan.description,
+                          direction: TransactionDirection.IN,
+                          date: new Date(),
+                          title: `Loan from ${loan.lender?.firstName || loan.lenderEmail || 'Someone'} to ${userCreateData.firstName}`,
+                          category: TransactionCategory.LOAN,
+                          payer: { connect: { id: user.id } },
+                        },
+                      ],
+                    },
                   },
-                },
-              });
-
-              // Notify the lender if they're registered
-              if (loan.lenderId) {
-                await this.notificationService.createNotification({
-                  type: NotificationType.LOAN_CREATED,
-                  message: `${userCreateData.firstName} ${userCreateData.lastName} has joined and is now linked to your loan.`,
-                  userIds: [loan.lenderId],
-                  payload: { loanId: loan.id, amount: loan.amount },
-                  loanId: loan.id,
                 });
-              }
-            }),
-          );
-        }
 
-        // Process lender loans
-        if (pendingLenderLoans.length > 0) {
-          await Promise.all(
-            pendingLenderLoans.map(async (loan) => {
-              await prisma.loan.update({
-                where: { id: loan.id },
-                data: {
-                  lender: { connect: { id: user.id } },
-                  lenderEmail: null,
-                  isAcknowledged: loan.borrowerId ? true : false,
+                // Notify the lender if they're registered
+                if (loan.lenderId) {
+                  await this.notificationService.createNotification({
+                    type: NotificationType.LOAN_CREATED,
+                    message: `${userCreateData.firstName} ${userCreateData.lastName} has joined and is now linked to your loan.`,
+                    userIds: [loan.lenderId],
+                    payload: { loanId: loan.id, amount: loan.amount },
+                    loanId: loan.id,
+                  });
+                }
+              }),
+            );
+          }
 
-                  // Create the "OUT" transaction for the lender
-                  transactions: {
-                    create: [
-                      {
-                        amount: loan.amount,
-                        description: loan.description,
-                        direction: TransactionDirection.OUT,
-                        date: new Date(),
-                        title: `Loan from ${userCreateData.firstName} to ${loan.borrower?.firstName || loan.borrowerEmail || 'Someone'}`,
-                        category: TransactionCategory.LOAN,
-                        payer: { connect: { id: user.id } },
-                      },
-                    ],
+          // Process lender loans
+          if (pendingLenderLoans.length > 0) {
+            await Promise.all(
+              pendingLenderLoans.map(async (loan) => {
+                await prisma.loan.update({
+                  where: { id: loan.id },
+                  data: {
+                    lender: { connect: { id: user.id } },
+                    lenderEmail: null,
+                    isAcknowledged: loan.borrowerId ? true : false,
+
+                    // Create the "OUT" transaction for the lender
+                    transactions: {
+                      create: [
+                        {
+                          amount: loan.amount,
+                          description: loan.description,
+                          direction: TransactionDirection.OUT,
+                          date: new Date(),
+                          title: `Loan from ${userCreateData.firstName} to ${loan.borrower?.firstName || loan.borrowerEmail || 'Someone'}`,
+                          category: TransactionCategory.LOAN,
+                          payer: { connect: { id: user.id } },
+                        },
+                      ],
+                    },
                   },
-                },
-              });
-
-              // Notify the borrower if they're registered
-              if (loan.borrowerId) {
-                await this.notificationService.createNotification({
-                  type: NotificationType.LOAN_CREATED,
-                  message: `${userCreateData.firstName} ${userCreateData.lastName} has joined and is now linked to your loan.`,
-                  userIds: [loan.borrowerId],
-                  payload: { loanId: loan.id, amount: loan.amount },
-                  loanId: loan.id,
                 });
-              }
-            }),
-          );
+
+                // Notify the borrower if they're registered
+                if (loan.borrowerId) {
+                  await this.notificationService.createNotification({
+                    type: NotificationType.LOAN_CREATED,
+                    message: `${userCreateData.firstName} ${userCreateData.lastName} has joined and is now linked to your loan.`,
+                    userIds: [loan.borrowerId],
+                    payload: { loanId: loan.id, amount: loan.amount },
+                    loanId: loan.id,
+                  });
+                }
+              }),
+            );
+          }
         }
 
         return user;
