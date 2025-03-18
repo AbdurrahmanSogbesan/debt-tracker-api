@@ -9,6 +9,7 @@ import {
   Patch,
   Query,
   Delete,
+  BadRequestException,
 } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from '../auth/guard';
@@ -35,19 +36,53 @@ export class LoanController {
 
   @Post()
   async createIndividualLoan(
-    @Body() createLoanDto: LoanCreateInput,
+    @Body() createLoanDto: LoanCreateInput & { otherPartyEmail?: string },
     @Request() req,
   ): Promise<Loan> {
     const { id: supabaseUid } = req.user || {};
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    const borrower = await this.loanService.getUserByEmail(
-      createLoanDto.borrower,
-    );
+
+    let otherPartyId: number | null = null;
+    let otherPartyEmail: string | null = null;
+
+    if (createLoanDto.otherPartyEmail) {
+      otherPartyEmail = createLoanDto.otherPartyEmail;
+
+      try {
+        const otherParty =
+          await this.loanService.getUserByEmail(otherPartyEmail);
+        if (otherParty) {
+          otherPartyId = otherParty.id;
+          otherPartyEmail = null;
+        }
+      } catch (error) {}
+    } else if (createLoanDto.borrower) {
+      try {
+        const borrower = await this.loanService.getUserByEmail(
+          createLoanDto.borrower,
+        );
+        otherPartyId = borrower?.id || null;
+
+        if (!otherPartyId) {
+          otherPartyEmail = createLoanDto.borrower;
+        }
+      } catch (error) {
+        otherPartyEmail = createLoanDto.borrower;
+      }
+    }
+
+    if (!otherPartyId && createLoanDto.groupId) {
+      throw new BadRequestException(
+        'Cannot link a loan to a group when the other party is not a registered user',
+      );
+    }
+
     return await this.loanService.createLoan(
       createLoanDto,
       userId,
-      borrower.id,
+      otherPartyId,
+      otherPartyEmail,
     );
   }
 

@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -27,19 +29,19 @@ import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class LoanService {
+  private readonly logger = new Logger(LoanService.name);
+
   constructor(
     private prisma: PrismaService,
     private membershipService: MembershipService,
     private notificationService: NotificationService,
   ) {}
 
-  async getUserByEmail(email: string): Promise<User> {
+  async getUserByEmail(email: string): Promise<User | null> {
+    if (!email) return null;
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email, isDeleted: false },
     });
-    if (!user || user.isDeleted) {
-      throw new NotFoundException(`User with email ${email} not found`);
-    }
     return user;
   }
 
@@ -112,73 +114,184 @@ export class LoanService {
   async createLoan(
     data: LoanCreateInput,
     userId: number,
-    otherUserId: number,
+    otherPartyId: number | null,
+    otherPartyEmail?: string | null,
   ): Promise<Loan> {
-    const [userFirstName, otherUserFirstName] = await Promise.all([
-      this.getUserFirstName(userId),
-      this.getUserFirstName(otherUserId),
-    ]);
+    try {
+      // Get user names outside of transaction to avoid nested queries
+      const userFirstName = await this.getUserFirstName(userId);
+      const otherPartyName = otherPartyId
+        ? await this.getUserFirstName(otherPartyId)
+        : otherPartyEmail
+          ? otherPartyEmail.split('@')[0]
+          : 'Guest';
 
-    const isUserLender = data.direction === TransactionDirection.OUT;
-    const lenderId = isUserLender ? userId : otherUserId;
-    const borrowerId = isUserLender ? otherUserId : userId;
-    const lenderName = isUserLender ? userFirstName : otherUserFirstName;
-    const borrowerName = isUserLender ? otherUserFirstName : userFirstName;
+      const isUserLender = data.direction === TransactionDirection.OUT;
 
-    const loanTitle = `Loan from ${lenderName} to ${borrowerName}`;
+      // Determine who's the lender and who's the borrower
+      const lenderId = isUserLender ? userId : otherPartyId;
+      const borrowerId = isUserLender ? otherPartyId : userId;
+      const lenderEmail = lenderId
+        ? null
+        : isUserLender
+          ? null
+          : otherPartyEmail;
+      const borrowerEmail = borrowerId
+        ? null
+        : isUserLender
+          ? otherPartyEmail
+          : null;
 
-    const loan = await this.prisma.loan.create({
-      data: {
+      // Validate: At least one registered user must be there
+      if (!lenderId && !borrowerId) {
+        throw new BadRequestException(
+          'At least one party must be a registered user',
+        );
+      }
+
+      // Names for the transaction title
+      const lenderName = lenderId
+        ? isUserLender
+          ? userFirstName
+          : otherPartyName
+        : lenderEmail
+          ? lenderEmail.split('@')[0]
+          : 'Unknown';
+
+      const borrowerName = borrowerId
+        ? isUserLender
+          ? otherPartyName
+          : userFirstName
+        : borrowerEmail
+          ? borrowerEmail.split('@')[0]
+          : 'Unknown';
+
+      const loanTitle = `Loan from ${lenderName} to ${borrowerName}`;
+
+      // Build the loan data dynamically to avoid undefined fields
+      const loanData: any = {
         description: data.description,
         amount: data.amount,
-        lender: { connect: { id: lenderId } },
-        borrower: { connect: { id: borrowerId } },
-        isAcknowledged: false,
+        lenderEmail: lenderEmail,
+        borrowerEmail: borrowerEmail,
+        isAcknowledged: Boolean(lenderId && borrowerId),
         dueDate: data.dueDate,
-        group: data.groupId ? { connect: { id: data.groupId } } : undefined,
-        status: data.status,
+        status: data.status || LoanStatus.ACTIVE,
         transactions: {
-          create: [
-            this.createLoanTransactionTemplate(
-              data.amount,
-              data.description,
-              TransactionDirection.OUT,
-              lenderId,
-              data.groupId,
-              loanTitle,
-            ),
-            this.createLoanTransactionTemplate(
-              data.amount,
-              data.description,
-              TransactionDirection.IN,
-              borrowerId,
-              data.groupId,
-              loanTitle,
-            ),
-          ],
+          create: [],
         },
-      },
-      include: {
-        transactions: true,
-        lender: true,
-        borrower: true,
-      },
-    });
+      };
 
-    // Create the notification for the loan created
-    const notificationMessage = `A new loan has been created between ${lenderName} and ${borrowerName}`;
-    const notificationPayload = { loanId: loan.id, amount: loan.amount };
+      // Only add relational fields if IDs exist
+      if (lenderId) {
+        loanData.lender = { connect: { id: lenderId } };
+      }
 
-    await this.notificationService.createNotification({
-      type: NotificationType.LOAN_CREATED,
-      message: notificationMessage,
-      userIds: [lenderId, borrowerId], // Notify both the lender and the borrower
-      payload: notificationPayload,
-      loanId: loan.id, // Link the notification to the loan,
-      groupId: loan?.groupId,
-    });
+      if (borrowerId) {
+        loanData.borrower = { connect: { id: borrowerId } };
+      }
 
-    return loan;
+      // Only link to group if both parties are registered
+      if (lenderId && borrowerId && data.groupId) {
+        loanData.group = { connect: { id: data.groupId } };
+      }
+
+      // Add transactions for registered users
+      if (lenderId) {
+        loanData.transactions.create.push(
+          this.createLoanTransactionTemplate(
+            data.amount,
+            data.description,
+            TransactionDirection.OUT,
+            lenderId,
+            lenderId && borrowerId ? data.groupId : undefined,
+            loanTitle,
+          ),
+        );
+      }
+
+      if (borrowerId) {
+        loanData.transactions.create.push(
+          this.createLoanTransactionTemplate(
+            data.amount,
+            data.description,
+            TransactionDirection.IN,
+            borrowerId,
+            lenderId && borrowerId ? data.groupId : undefined,
+            loanTitle,
+          ),
+        );
+      }
+
+      // Create the loan within a transaction
+      const loan = await this.prisma.$transaction(async (prisma) => {
+        return prisma.loan.create({
+          data: loanData,
+          include: {
+            transactions: true,
+            lender: true,
+            borrower: true,
+          },
+        });
+      });
+
+      const notificationMessage = `A new loan has been created between ${lenderName} and ${borrowerName}`;
+      const notificationPayload = {
+        loanId: loan.id,
+        amount: loan.amount,
+        lenderEmail: lenderEmail,
+        borrowerEmail: borrowerEmail,
+      };
+
+      const userIdsToNotify = [
+        ...(lenderId ? [lenderId] : []),
+        ...(borrowerId ? [borrowerId] : []),
+      ];
+
+      if (userIdsToNotify.length > 0) {
+        try {
+          await this.notificationService.createNotification({
+            type: NotificationType.LOAN_CREATED,
+            message: notificationMessage,
+            userIds: userIdsToNotify,
+            payload: notificationPayload,
+            loanId: loan.id,
+            groupId: loan.groupId,
+          });
+        } catch (error) {
+          this.logger.error(`Failed to create notification: ${error.message}`, {
+            loanId: loan.id,
+            userIds: userIdsToNotify,
+          });
+        }
+      }
+
+      return loan;
+    } catch (error) {
+      this.logger.error(`Failed to create loan: ${error.message}`, {
+        userId,
+        otherPartyId,
+        otherPartyEmail,
+        data,
+        stack: error.stack,
+      });
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      if (error.code === 'P2002') {
+        throw new BadRequestException('A unique constraint was violated.');
+      }
+
+      if (error.code === 'P2003') {
+        throw new BadRequestException('A foreign key constraint was violated.');
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to create loan. Please try again later.',
+      );
+    }
   }
 
   async getLoanDetails(
