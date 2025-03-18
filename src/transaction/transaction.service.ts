@@ -179,6 +179,16 @@ export class TransactionService {
               },
               {
                 loan: {
+                  lenderEmail: { contains: search, mode: 'insensitive' },
+                },
+              },
+              {
+                loan: {
+                  borrowerEmail: { contains: search, mode: 'insensitive' },
+                },
+              },
+              {
+                loan: {
                   OR: [
                     {
                       lender: {
