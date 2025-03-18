@@ -147,14 +147,16 @@ model Loan {
   status         LoanStatus @default(ACTIVE)
   amount         Float
   description    String
+  borrowerEmail String?
+  lenderEmail    String?
 
   group   Group? @relation(fields: [groupId], references: [id])
   groupId Int?
 
   transactions Transaction[]
 
-  lender   User @relation("Lender", fields: [lenderId], references: [id])
-  lenderId Int
+  lender   User? @relation("Lender", fields: [lenderId], references: [id])
+  lenderId Int?
 
   borrower   User? @relation("Borrower", fields: [borrowerId], references: [id])
   borrowerId Int?
