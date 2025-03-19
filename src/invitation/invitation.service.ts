@@ -39,6 +39,7 @@ export class InvitationService {
       {},
       { members: { where: { isDeleted: false } } },
     );
+    console.log('🚀 ~ InvitationService ~ createInvitation ~ group:', group);
 
     const inviter = group.members.find((member) => member.userId === inviterId);
     if (!inviter) {

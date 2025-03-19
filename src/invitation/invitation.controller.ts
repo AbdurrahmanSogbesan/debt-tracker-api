@@ -31,7 +31,7 @@ export class InvitationController {
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
 
     return await this.invitationService.createInvitation(
-      data.groupId,
+      +data.groupId,
       data.email,
       inviterId,
     );

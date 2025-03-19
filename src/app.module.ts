@@ -32,7 +32,7 @@ import * as path from 'path';
       useFactory: async (config: ConfigService) => ({
         transport: {
           host: config.get('MAIL_HOST'),
-          port: config.get('MAIL_PORT') || 465,
+          port: config.get('MAIL_PORT') || 25,
           auth: {
             user: config.get('POSTMARK_API_TOKEN'),
             pass: config.get('POSTMARK_API_TOKEN'),
