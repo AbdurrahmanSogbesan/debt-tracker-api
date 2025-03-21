@@ -44,6 +44,7 @@ enum NotificationType {
   INVITATION_ACCEPTED 
   GROUP_ROLE_UPDATED 
   GROUP_DELETED 
+  ADMIN_ALERT
 }
 
 enum InvitationStatus {

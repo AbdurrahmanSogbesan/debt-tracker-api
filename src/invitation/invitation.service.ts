@@ -4,6 +4,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { GroupRole, InvitationStatus, NotificationType } from '@prisma/client';
@@ -15,6 +16,7 @@ import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class InvitationService {
+  private readonly logger = new Logger(InvitationService.name);
   constructor(
     private prisma: PrismaService,
     private mailService: MailService,
@@ -34,45 +36,46 @@ export class InvitationService {
   }
 
   async createInvitation(groupId: number, email: string, inviterId: number) {
-    const group = await this.membershipService.getGroupWithMembers(
-      groupId,
-      {},
-      { members: { where: { isDeleted: false } } },
-    );
-    console.log('🚀 ~ InvitationService ~ createInvitation ~ group:', group);
+    const [group, isAdmin] = await Promise.all([
+      this.membershipService.getGroupWithMembers(
+        groupId,
+        {},
+        { members: { where: { isDeleted: false } } },
+      ),
+      this.membershipService.isGroupMemberAdmin(groupId, inviterId),
+    ]);
 
+    // Find inviter and validate permissions
     const inviter = group.members.find((member) => member.userId === inviterId);
     if (!inviter) {
       throw new ForbiddenException('You are not a member of this group');
     }
 
-    const isAdmin = await this.membershipService.isGroupMemberAdmin(
-      groupId,
-      inviterId,
-    );
     if (!isAdmin) {
       throw new ForbiddenException('Only admins can send invites!');
     }
 
-    const isExistingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    const [existingUser, existingInvitation] = await Promise.all([
+      this.prisma.user.findUnique({ where: { email } }),
+      this.prisma.invitation.findFirst({
+        where: {
+          groupId,
+          email,
+          status: InvitationStatus.PENDING,
+          isExpired: false,
+        },
+      }),
+    ]);
 
-    const isGroupMember = group.members.find(
-      (member) => member.userId === isExistingUser?.id,
-    );
-    if (isGroupMember) {
-      throw new ForbiddenException('User is already a member of this group');
+    if (existingUser) {
+      const isGroupMember = group.members.find(
+        (member) => member.userId === existingUser.id,
+      );
+
+      if (isGroupMember) {
+        throw new ForbiddenException('User is already a member of this group');
+      }
     }
-
-    const existingInvitation = await this.prisma.invitation.findFirst({
-      where: {
-        groupId,
-        email,
-        status: InvitationStatus.PENDING,
-        isExpired: false,
-      },
-    });
 
     if (existingInvitation) {
       throw new BadRequestException(
@@ -80,46 +83,105 @@ export class InvitationService {
       );
     }
 
-    // Create invitation and send mail inside transaction
-    const invitation = await this.prisma.$transaction(async (prisma) => {
-      const newInvitation = await prisma.invitation.create({
+    // Create invitation and notification in a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      const newInvitation = await tx.invitation.create({
         data: {
           groupId,
           email,
-          userId: isExistingUser ? isExistingUser.id : null,
+          userId: existingUser?.id || null,
         },
       });
 
-      // Send email
-      await this.mailService.sendEmail({
-        recipients: email,
-        subject: `You are Invited to Join Our Group; ${group.name}`,
-        textBody: `Hi, you've been invited to join the group. Follow the link to accept the invitation. ${process.env.FRONTEND_URL}`,
-        htmlBody: `<p>Hi, you've been invited to join the group. Follow the link to accept the invitation.</p>`,
-      });
+      let notification = null;
+      if (existingUser) {
+        const inviterName = await this.getUserFirstName(inviterId);
+        notification = await tx.notification.create({
+          data: {
+            type: NotificationType.INVITATION_RECEIVED,
+            message: `${inviterName} has invited you to join "${group.name}". Tap to view the invitation.`,
+            payload: {
+              groupId,
+              groupName: group.name,
+              inviterId,
+              invitationId: newInvitation.id,
+            },
+            users: {
+              connect: [{ id: existingUser.id }],
+            },
+            group: { connect: { id: groupId } },
+            invite: { connect: { id: newInvitation.id } },
+          },
+        });
+      }
 
-      return newInvitation;
+      return { invitation: newInvitation, notification };
     });
 
-    // Add notification for existing user outside the transaction
-    if (isExistingUser) {
-      const inviterName = await this.getUserFirstName(inviterId);
-      await this.notificationService.createNotification({
-        type: NotificationType.INVITATION_RECEIVED,
-        message: `${inviterName} has invited you to join "${group.name}". Tap to view the invitation.`,
-        userIds: [isExistingUser.id],
-        payload: {
-          groupId,
-          groupName: group.name,
-          inviterId,
-          invitationId: invitation.id,
-        },
-        groupId,
-        inviteId: invitation.id,
+    const invitationLink = existingUser
+      ? `${process.env.FRONTEND_URL}/login?invitationId=${result.invitation.id}`
+      : `${process.env.FRONTEND_URL}/signup?invitationId=${result.invitation.id}`;
+
+    try {
+      const emailSubject = `You are Invited to Join Our Group: ${group.name}`;
+      let emailBody = '';
+
+      if (existingUser) {
+        emailBody = `
+        Hi,
+        
+        You've been invited to join the group "${group.name}". 
+        
+        Log in to your account to view and accept this invitation:
+        ${invitationLink}
+        
+        An invitation notification will be waiting for you after you log in.
+      `;
+      } else {
+        emailBody = `
+        Hi,
+        
+        You've been invited to join the group "${group.name}".
+        
+        Follow this link to create an account and accept the invitation:
+        ${invitationLink}
+      `;
+      }
+
+      await this.mailService.sendEmail({
+        recipients: email,
+        subject: emailSubject,
+        textBody: emailBody,
+        htmlBody: emailBody.replace(/\n/g, '<br>'),
       });
+    } catch (emailError) {
+      this.logger.error('Failed to send invitation email', {
+        email,
+        invitationId: result.invitation.id,
+        error: emailError.message,
+        userExists: !!existingUser,
+      });
+
+      // Get admin IDs and create notification only if there are admins
+      const adminIds = group.members
+        .filter((member) => member.role === GroupRole.ADMIN)
+        .map((admin) => admin.userId);
+
+      if (adminIds.length > 0) {
+        await this.notificationService.createNotification({
+          type: NotificationType.ADMIN_ALERT,
+          message: `Failed to send invitation email to ${email}. Please check logs.`,
+          userIds: adminIds,
+          payload: {
+            email,
+            invitationId: result.invitation.id,
+            error: emailError.message,
+          },
+        });
+      }
     }
 
-    return invitation;
+    return result.invitation;
   }
 
   async acceptInvitation(invitationId: number, userId: number) {
@@ -179,7 +241,7 @@ export class InvitationService {
       }
 
       // Add the user as a new member of the group
-      return prisma.groupMembership.create({
+      return await prisma.groupMembership.create({
         data: {
           groupId: invitation.groupId,
           userId,
