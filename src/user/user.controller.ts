@@ -27,7 +27,6 @@ export class UserController {
     @Body() createUserDto: Prisma.UserCreateInput,
     @Request() req,
     @Body('invitationId') invitationId?: number,
-    @Body('syncLoans') syncLoans?: boolean,
   ) {
     const { email, id: supabaseUid } = req.user || {};
     return await this.userService.create({
@@ -35,7 +34,6 @@ export class UserController {
       supabaseUid,
       ...createUserDto,
       invitationId,
-      syncLoans,
     });
   }
 

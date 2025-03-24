@@ -297,11 +297,10 @@ export class UserService {
   async create(
     data: Prisma.UserCreateInput & {
       invitationId?: number;
-      syncLoans?: boolean;
     },
   ) {
     try {
-      const { invitationId, syncLoans = false, ...userCreateData } = data;
+      const { invitationId, ...userCreateData } = data;
 
       return await this.prisma.$transaction(async (prisma) => {
         // Create the user
@@ -319,10 +318,7 @@ export class UserService {
           );
         }
 
-        // Process any pending loans if syncLoans is true
-        if (syncLoans) {
-          await this.syncUserLoans(prisma, user, userCreateData);
-        }
+        await this.syncUserLoans(prisma, user, userCreateData);
 
         return user;
       });
