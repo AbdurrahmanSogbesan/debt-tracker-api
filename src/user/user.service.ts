@@ -34,7 +34,11 @@ export class UserService {
     try {
       const statusCounts = await this.prisma.loan.groupBy({
         by: ['status'],
-        where: { ...where, isDeleted: false },
+        where: {
+          ...where,
+          isDeleted: false,
+          parentId: null,
+        },
         _count: true,
         _sum: { amount: true },
       });
