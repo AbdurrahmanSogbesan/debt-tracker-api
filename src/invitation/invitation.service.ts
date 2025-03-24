@@ -314,4 +314,20 @@ export class InvitationService {
     }
     return invitation;
   }
+
+  async getPendingInvitations(userId: number) {
+    const invitation = this.prisma.invitation.findMany({
+      where: {
+        userId,
+        status: InvitationStatus.PENDING,
+        isExpired: false,
+        isDeleted: false,
+      },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('No pending invitations found.');
+    }
+    return invitation;
+  }
 }
