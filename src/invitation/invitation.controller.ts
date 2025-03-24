@@ -43,10 +43,6 @@ export class InvitationController {
     const { id: supabaseUid } = req.user || {};
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    console.log(
-      '🚀 ~ InvitationController ~ getPendingInvitations ~ userId:',
-      userId,
-    );
 
     return await this.invitationService.getPendingInvitations(userId);
   }
