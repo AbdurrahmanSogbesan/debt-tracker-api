@@ -53,12 +53,11 @@ export class InvitationController {
     @Query() query: GetInvitationQueryDto,
     @Request() req,
   ) {
-    const { groupId, email } = query;
+    const { groupId } = query;
 
     return await this.invitationService.getInvitationById(
       +invitationId,
       parseInt(groupId),
-      email,
     );
   }
 

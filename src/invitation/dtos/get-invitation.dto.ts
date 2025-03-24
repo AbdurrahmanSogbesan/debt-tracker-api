@@ -4,9 +4,4 @@ export class GetInvitationQueryDto {
   @IsNotEmpty()
   @IsNumberString()
   groupId: string;
-
-  @IsNotEmpty()
-  @IsString()
-  @IsEmail()
-  email: string;
 }

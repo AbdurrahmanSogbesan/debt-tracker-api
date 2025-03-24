@@ -119,8 +119,8 @@ export class InvitationService {
     });
 
     const invitationLink = existingUser
-      ? `${process.env.FRONTEND_URL}/login?invitationId=${result.invitation.id}`
-      : `${process.env.FRONTEND_URL}/signup?invitationId=${result.invitation.id}`;
+      ? `${process.env.FRONTEND_URL}/login?invitationId=${result.invitation.id}?groupId=${groupId}`
+      : `${process.env.FRONTEND_URL}/signup?invitationId=${result.invitation.id}?groupId=${groupId}`;
 
     try {
       const emailSubject = `You are Invited to Join Our Group: ${group.name}`;
@@ -298,13 +298,10 @@ export class InvitationService {
     });
   }
 
-  async getInvitationById(
-    invitationId: number,
-    groupId: number,
-    email: string,
-  ) {
+  async getInvitationById(invitationId: number, groupId: number) {
     const invitation = await this.prisma.invitation.findUnique({
-      where: { id: invitationId, groupId, email, isDeleted: false },
+      where: { id: invitationId, groupId, isDeleted: false },
+      include: { group: true },
     });
     if (!invitation) {
       throw new BadRequestException('Invalid invitation.');
