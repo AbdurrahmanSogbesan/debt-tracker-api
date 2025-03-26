@@ -1,7 +1,11 @@
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class LoanTransferDto {
   @IsString()
-  @IsNotEmpty()
-  newBorrowerEmail: string;
+  @IsOptional()
+  newBorrowerEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  newPartyEmail?: string;
 }
