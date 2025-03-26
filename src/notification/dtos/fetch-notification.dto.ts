@@ -1,6 +1,6 @@
-import { IsOptional, IsEnum, IsInt } from 'class-validator';
+import { IsOptional, IsEnum, IsInt, IsBoolean } from 'class-validator';
 import { NotificationType } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class FetchNotificationsDto {
   @IsOptional()
@@ -23,6 +23,13 @@ export class FetchNotificationsDto {
   limit?: number = 10;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @IsBoolean()
+  @Transform(({ value }) =>
+    value === 'true' || value === true
+      ? true
+      : value === 'false' || value === false
+        ? false
+        : value,
+  )
   isRead?: boolean;
 }

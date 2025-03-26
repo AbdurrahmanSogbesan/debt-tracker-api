@@ -41,6 +41,15 @@ export class NotificationController {
     return await this.notificationService.getAllNotifications(userId, query);
   }
 
+  @Patch('read-all')
+  async markAllAsRead(@Request() req) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+    await this.notificationService.markAllAsRead(userId);
+    return { success: true, message: 'All notifications marked as read' };
+  }
+
   @Get(':id')
   async getSingleNotification(
     @Request() req,

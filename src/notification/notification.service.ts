@@ -40,7 +40,7 @@ export class NotificationService {
 
     const where: Prisma.NotificationWhereInput = {
       users: { some: { id: userId } },
-      ...(type && { type }),
+      ...(type ? { type } : {}),
       ...(isRead !== undefined && { isRead }),
       ...(groupId ? { groupId } : {}),
       isDeleted: false,
@@ -137,6 +137,27 @@ export class NotificationService {
     return this.prisma.notification.update({
       where: { id: notificationId },
       data: { isRead: true },
+    });
+  }
+
+  async markAllAsRead(userId: number) {
+    const notification = await this.prisma.notification.findMany({
+      where: { users: { some: { id: userId } }, isDeleted: false },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification(s) not found');
+    }
+
+    return this.prisma.notification.updateMany({
+      where: {
+        users: { some: { id: userId } },
+        isDeleted: false,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
     });
   }
 
