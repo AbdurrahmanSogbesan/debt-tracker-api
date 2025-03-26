@@ -27,6 +27,8 @@ import { MembershipService } from 'src/membership/membership.service';
 import { UpdateSplitLoanDto } from './dto/update-split-loan.dto';
 import { GetChildLoansDto } from './dto/get-child-loans.dto';
 import { NotificationService } from 'src/notification/notification.service';
+import { addDays, differenceInDays, endOfDay, startOfDay } from 'date-fns';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class LoanService {
@@ -37,6 +39,92 @@ export class LoanService {
     private membershipService: MembershipService,
     private notificationService: NotificationService,
   ) {}
+
+  private generateReminderMessage(
+    daysUntilDue: number,
+    amount: number,
+  ): string {
+    if (daysUntilDue === 0) {
+      return `Loan payment of $${amount.toFixed(2)} is due today!`;
+    }
+    return `Reminder: Loan payment of $${amount.toFixed(2)} is due in ${daysUntilDue} day${daysUntilDue !== 1 ? 's' : ''}.`;
+  }
+
+  private generateOverdueMessage(daysOverdue: number, amount: number): string {
+    return `OVERDUE ALERT: Loan payment of $${amount.toFixed(2)} is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} past due.`;
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async handleLoanReminders() {
+    try {
+      const upcomingLoans = await this.prisma.loan.findMany({
+        where: {
+          status: LoanStatus.ACTIVE,
+          isDeleted: false,
+          dueDate: {
+            gte: startOfDay(new Date()),
+            lte: endOfDay(addDays(new Date(), 3)),
+          },
+        },
+        include: {
+          borrower: true,
+          lender: true,
+        },
+      });
+
+      for (const loan of upcomingLoans) {
+        const daysUntilDue = differenceInDays(loan.dueDate, new Date());
+
+        await this.notificationService.createNotification({
+          type: 'LOAN_REMINDER',
+          message: this.generateReminderMessage(daysUntilDue, loan.amount),
+          userIds: [loan.borrowerId, loan.lenderId].filter(Boolean),
+          loanId: loan.id,
+          payload: { loanId: loan.id, amount: loan.amount },
+        });
+      }
+
+      this.logger.log(`Processed ${upcomingLoans.length} loan reminders`);
+    } catch (error) {
+      this.logger.error('Error in loan reminders cron job:', error);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async handleOverdueLoans() {
+    try {
+      // Find overdue loans
+      const overdueLoans = await this.prisma.loan.findMany({
+        where: {
+          status: LoanStatus.ACTIVE,
+          isDeleted: false,
+          dueDate: {
+            lt: startOfDay(new Date()),
+          },
+        },
+        include: {
+          borrower: true,
+          lender: true,
+        },
+      });
+
+      for (const loan of overdueLoans) {
+        const daysOverdue = differenceInDays(new Date(), loan.dueDate);
+
+        await this.notificationService.createNotification({
+          type: NotificationType.OVERDUE_ALERT,
+          message: this.generateOverdueMessage(daysOverdue, loan.amount),
+          userIds: [loan.borrowerId, loan.lenderId].filter(Boolean),
+          loanId: loan.id,
+          payload: { loanId: loan.id, amount: loan.amount },
+        });
+      }
+
+      this.logger.log(`Processed ${overdueLoans.length} overdue loans`);
+    } catch (error) {
+      this.logger.error('Error in overdue loans cron job:', error);
+    }
+  }
 
   async getUserByEmail(email: string): Promise<User | null> {
     if (!email) return null;

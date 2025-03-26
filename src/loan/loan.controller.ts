@@ -26,7 +26,6 @@ import {
 import { UpdateSplitLoanRequest } from './dto/update-split-loan.dto';
 import { GetChildLoansDto } from './dto/get-child-loans.dto';
 
-@UseGuards(JwtGuard)
 @Controller('loan')
 export class LoanController {
   constructor(
@@ -34,6 +33,7 @@ export class LoanController {
     private readonly groupService: GroupService,
   ) {}
 
+  @UseGuards(JwtGuard)
   @Post()
   async createIndividualLoan(
     @Body() createLoanDto: LoanCreateInput & { otherPartyEmail?: string },
@@ -86,6 +86,19 @@ export class LoanController {
     );
   }
 
+  @Get('reminders')
+  async triggerLoanReminders() {
+    await this.loanService.handleLoanReminders();
+    return { message: 'Loan reminders processed successfully' };
+  }
+
+  @Get('overdue')
+  async triggerOverdueLoans() {
+    await this.loanService.handleOverdueLoans();
+    return { message: 'Overdue loans processed successfully' };
+  }
+
+  @UseGuards(JwtGuard)
   @Get(':id')
   async getLoanById(
     @Param('id') id: number,
@@ -94,6 +107,7 @@ export class LoanController {
     return await this.loanService.getLoanDetails(+id, type);
   }
 
+  @UseGuards(JwtGuard)
   @Patch(':id')
   async updateIndividualLoan(
     @Param('id') id: number,
@@ -106,6 +120,7 @@ export class LoanController {
     return await this.loanService.updateLoan(+id, updateLoanDto, userId);
   }
 
+  @UseGuards(JwtGuard)
   @Patch(':id/transfer')
   async transferLoan(
     @Param('id') id: number,
@@ -133,6 +148,7 @@ export class LoanController {
     );
   }
 
+  @UseGuards(JwtGuard)
   @Patch(':id/delete')
   async deleteIndividualLoan(
     @Param('id') id: number,
@@ -144,8 +160,8 @@ export class LoanController {
     return await this.loanService.deleteLoan(+id, userId);
   }
 
-  // Split Loan Operations
-  @Post('splits') // Changed from 'splits' for consistency
+  @UseGuards(JwtGuard)
+  @Post('splits')
   async createSplitLoan(
     @Body() createSplitLoanDto: CreateSplitLoanRequest,
     @Request() req,
@@ -170,6 +186,7 @@ export class LoanController {
     );
   }
 
+  @UseGuards(JwtGuard)
   @Patch(':id/splits')
   async updateSplitLoan(
     @Param('id') id: string,
@@ -199,6 +216,7 @@ export class LoanController {
     );
   }
 
+  @UseGuards(JwtGuard)
   @Patch(':id/splits/delete')
   async deleteSplitLoan(
     @Param('id') id: number,
@@ -210,6 +228,7 @@ export class LoanController {
     return await this.loanService.deleteSplitLoan(+id, userId);
   }
 
+  @UseGuards(JwtGuard)
   @Get(':parentId/child-loans')
   async getChildLoans(
     @Param('parentId') parentId: number,

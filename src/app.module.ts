@@ -10,6 +10,7 @@ import { MembershipModule } from './membership/membership.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { LoanModule } from './loan/loan.module';
 import { MailModule } from './mail/mail.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { InvitationModule } from './invitation/invitation.module';
@@ -19,6 +20,7 @@ import * as path from 'path';
 @Module({
   imports: [
     PrismaModule,
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({ envFilePath: '.env', isGlobal: true }),
     AuthModule,
     UserModule,
