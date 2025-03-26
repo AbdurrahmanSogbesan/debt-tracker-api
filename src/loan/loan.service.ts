@@ -118,6 +118,10 @@ export class LoanService {
           loanId: loan.id,
           payload: { loanId: loan.id, amount: loan.amount },
         });
+        console.log(
+          'user ids --->>',
+          [loan.borrowerId, loan.lenderId].filter(Boolean),
+        );
       }
 
       this.logger.log(`Processed ${overdueLoans.length} overdue loans`);

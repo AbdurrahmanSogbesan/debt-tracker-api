@@ -8,7 +8,7 @@ import {
   IsInt,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 import {
   Prisma,
@@ -34,6 +34,13 @@ export class UpdateIndividualLoanDto {
 
   @IsOptional()
   @IsBoolean()
+  @Transform(({ value }) =>
+    value === 'true' || value === true
+      ? true
+      : value === 'false' || value === false
+        ? false
+        : value,
+  )
   isAcknowledged?: boolean;
 
   @IsOptional()
