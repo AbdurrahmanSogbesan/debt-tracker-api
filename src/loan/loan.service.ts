@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -357,178 +358,9 @@ export class LoanService {
     data: UpdateIndividualLoanDto,
     userId: number,
   ): Promise<Loan> {
-    const loan = await this.prisma.loan.findUnique({
-      where: { id, isDeleted: false, lenderId: userId },
-      include: { transactions: true },
-    });
-
-    if (!loan) {
-      throw new NotFoundException(`Loan with ID ${id} not found`);
-    }
-
-    const result = await this.prisma.loan.update({
-      where: { id },
-      data: {
-        amount: data.amount,
-        description: data.description,
-        dueDate: data.dueDate,
-        isAcknowledged: data.isAcknowledged,
-        status: data.status,
-        transactions: {
-          updateMany: {
-            where: { loanId: id },
-            data: {
-              amount: data.amount,
-              description: data.description,
-            },
-          },
-        },
-      },
-      include: {
-        transactions: true,
-        lender: true,
-        borrower: true,
-      },
-    });
-
-    if (data.status === LoanStatus.REPAID) {
-      const lenderName = await this.getUserFirstName(result.lenderId);
-      const borrowerName = await this.getUserFirstName(result.borrowerId);
-
-      // Notification for lender
-      await this.notificationService.createNotification({
-        type: NotificationType.LOAN_REPAID,
-        message: `${borrowerName} has repaid the loan of ${result.amount}`,
-        userIds: [result.lenderId],
-        payload: {
-          loanId: result.id,
-          amount: result.amount,
-          status: result.status,
-          perspective: 'lender',
-        },
-        loanId: result.id,
-        groupId: result?.groupId,
-      });
-
-      // Notification for borrower
-      await this.notificationService.createNotification({
-        type: NotificationType.LOAN_REPAID,
-        message: `You have repaid the loan of ${result.amount} to ${lenderName}`,
-        userIds: [result.borrowerId],
-        payload: {
-          loanId: result.id,
-          amount: result.amount,
-          status: result.status,
-          perspective: 'borrower',
-        },
-        loanId: result.id,
-        groupId: result?.groupId,
-      });
-    }
-
-    // Balance update(loan amount changes) notification
-    if (loan.amount !== result.amount) {
-      const amountDifference = Math.abs(loan.amount - result.amount);
-
-      await this.notificationService.createNotification({
-        type: NotificationType.BALANCE_UPDATE,
-        message: `Loan amount updated from ${loan.amount} to ${result.amount}`,
-        userIds: [result.lenderId, result.borrowerId],
-        payload: {
-          loanId: result.id,
-          oldAmount: loan.amount,
-          newAmount: result.amount,
-          amountDifference: amountDifference,
-        },
-        loanId: result.id,
-        groupId: result?.groupId,
-      });
-    }
-
-    return result;
-  }
-
-  async transferLoan(
-    id: number,
-    newBorrowerId: number,
-    userId: number,
-  ): Promise<Loan> {
-    const loan = await this.prisma.loan.findUnique({
-      where: { id, isDeleted: false, lenderId: userId },
-      include: {
-        transactions: true,
-        borrower: true,
-        lender: true,
-      },
-    });
-
-    if (!loan) {
-      throw new NotFoundException(
-        `Loan with ID ${id} not found or you're not the lender`,
-      );
-    }
-
-    // Check if the new borrower is different from the current borrower
-    if (loan.borrower.id === newBorrowerId) {
-      throw new BadRequestException(
-        `The loan is already assigned to this borrower`,
-      );
-    }
-
-    const newBorrower = await this.prisma.user.findUnique({
-      where: { id: newBorrowerId, isDeleted: false },
-    });
-
-    if (!newBorrower) {
-      throw new NotFoundException(`User with ID ${newBorrowerId} not found`);
-    }
-
-    const oldBorrowerTransaction = loan.transactions.find(
-      (t) => t.direction === TransactionDirection.IN,
-    );
-    const lenderTransaction = loan.transactions.find(
-      (t) => t.direction === TransactionDirection.OUT,
-    );
-
-    if (!oldBorrowerTransaction || !lenderTransaction) {
-      throw new Error('Loan transactions are incomplete or corrupted');
-    }
-
-    const newLoanTitle = `Loan from ${loan.lender.firstName} to ${newBorrower.firstName}`;
-
-    // Sequential Transaction here to make sure if one process/query fails, the entire thing fails.
-    return await this.prisma.$transaction(async (prisma) => {
-      const updatedLoan = await prisma.loan.update({
-        where: { id },
-        data: {
-          borrower: { connect: { id: newBorrowerId } },
-          transactions: {
-            update: {
-              where: { id: lenderTransaction.id },
-              data: {
-                title: newLoanTitle,
-                description: `Loan given: ${loan.description} (Transferred to ${newBorrower.firstName})`,
-              },
-            },
-            ...(oldBorrowerTransaction && {
-              updateMany: {
-                where: { id: oldBorrowerTransaction.id },
-                data: {
-                  isDeleted: true,
-                  description: `Loan received: ${loan.description} (Transferred Loan to ${newBorrower.firstName})`,
-                },
-              },
-            }),
-            create: this.createLoanTransactionTemplate(
-              loan.amount,
-              `${loan.description} (Transferred Loan from ${loan.borrower.firstName})`,
-              TransactionDirection.IN,
-              newBorrowerId,
-              loan.groupId,
-              newLoanTitle,
-            ),
-          },
-        },
+    try {
+      const loan = await this.prisma.loan.findUnique({
+        where: { id, isDeleted: false },
         include: {
           transactions: true,
           lender: true,
@@ -536,8 +368,397 @@ export class LoanService {
         },
       });
 
-      return updatedLoan;
+      if (!loan) {
+        throw new NotFoundException(`Loan with ID ${id} not found`);
+      }
+
+      if (loan.lenderId !== userId && loan.borrowerId !== userId) {
+        throw new ForbiddenException(
+          'You are not authorized to update this loan',
+        );
+      }
+
+      const isUserLender = loan.lenderId === userId;
+      const isUserBorrower = loan.borrowerId === userId;
+
+      const lenderName = loan.lender?.id
+        ? await this.getUserFirstName(loan.lender.id)
+        : loan.lenderEmail?.split('@')[0] || 'Unknown';
+
+      const borrowerName = loan.borrower?.id
+        ? await this.getUserFirstName(loan.borrower.id)
+        : loan.borrowerEmail?.split('@')[0] || 'Unknown';
+
+      // Build update data dynamically to avoid undefined fields
+      const updateData: any = {};
+
+      if (data.amount !== undefined) updateData.amount = data.amount;
+      if (data.description !== undefined)
+        updateData.description = data.description;
+      if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
+
+      // Only the registered user can acknowledge the loan
+      // If the loan involves a non-registered user, the acknowledgement logic must be handled carefully
+      if (data.isAcknowledged !== undefined) {
+        // For a loan where both parties are registered, either can acknowledge
+        if (loan.lenderId && loan.borrowerId) {
+          updateData.isAcknowledged = data.isAcknowledged;
+        }
+        // For a loan with a non-registered party, only the registered user can set acknowledgement
+        else if (
+          (isUserLender && !loan.borrowerId) ||
+          (isUserBorrower && !loan.lenderId)
+        ) {
+          updateData.isAcknowledged = data.isAcknowledged;
+        }
+      }
+
+      if (data.status !== undefined) updateData.status = data.status;
+
+      // Update group if provided and both parties are registered users
+      if (data.groupId !== undefined && loan.lenderId && loan.borrowerId) {
+        updateData.group = { connect: { id: data.groupId } };
+        updateData.groupId = data.groupId;
+      }
+
+      // Only update transaction fields that are being changed in the loan
+      const transactionUpdateData: any = {};
+      if (data.amount !== undefined) transactionUpdateData.amount = data.amount;
+      if (data.description !== undefined)
+        transactionUpdateData.description = data.description;
+
+      if (
+        Object.keys(transactionUpdateData).length > 0 &&
+        loan.transactions.length > 0
+      ) {
+        updateData.transactions = {
+          updateMany: {
+            where: { loanId: id },
+            data: transactionUpdateData,
+          },
+        };
+      }
+
+      // Create the loan within a transaction
+      const result = await this.prisma.$transaction(async (tx) => {
+        return tx.loan.update({
+          where: { id },
+          data: updateData,
+          include: {
+            transactions: true,
+            lender: true,
+            borrower: true,
+          },
+        });
+      });
+
+      // Notifications block - only notify registered users
+      const userIdsToNotify = [
+        ...(result.lenderId ? [result.lenderId] : []),
+        ...(result.borrowerId ? [result.borrowerId] : []),
+      ].filter((id) => id !== null);
+
+      if (data.status !== undefined && data.status !== loan.status) {
+        if (data.status === LoanStatus.REPAID) {
+          if (result.lenderId) {
+            try {
+              await this.notificationService.createNotification({
+                type: NotificationType.LOAN_REPAID,
+                message: `${borrowerName} has repaid the loan of ${result.amount}`,
+                userIds: [result.lenderId],
+                payload: {
+                  loanId: result.id,
+                  amount: result.amount,
+                  status: result.status,
+                  perspective: 'lender',
+                },
+                loanId: result.id,
+                groupId: result.groupId,
+              });
+            } catch (error) {
+              this.logger.error(
+                `Failed to create lender notification: ${error.message}`,
+                {
+                  loanId: result.id,
+                  lenderId: result.lenderId,
+                },
+              );
+            }
+          }
+
+          // Notification for borrower (only if registered)
+          if (result.borrowerId) {
+            try {
+              await this.notificationService.createNotification({
+                type: NotificationType.LOAN_REPAID,
+                message: `You have repaid the loan of ${result.amount} to ${lenderName}`,
+                userIds: [result.borrowerId],
+                payload: {
+                  loanId: result.id,
+                  amount: result.amount,
+                  status: result.status,
+                  perspective: 'borrower',
+                },
+                loanId: result.id,
+                groupId: result.groupId,
+              });
+            } catch (error) {
+              this.logger.error(
+                `Failed to create borrower notification: ${error.message}`,
+                {
+                  loanId: result.id,
+                  borrowerId: result.borrowerId,
+                },
+              );
+            }
+          }
+        } else {
+          // Generic status change notification
+          if (userIdsToNotify.length > 0) {
+            try {
+              await this.notificationService.createNotification({
+                type: NotificationType.LOAN_REPAID,
+                message: `Loan status updated from ${loan.status} to ${result.status}`,
+                userIds: userIdsToNotify,
+                payload: {
+                  loanId: result.id,
+                  oldStatus: loan.status,
+                  newStatus: result.status,
+                },
+                loanId: result.id,
+                groupId: result.groupId,
+              });
+            } catch (error) {
+              this.logger.error(
+                `Failed to create status notification: ${error.message}`,
+                {
+                  loanId: result.id,
+                  userIds: userIdsToNotify,
+                },
+              );
+            }
+          }
+        }
+      }
+
+      // Amount change notification (only for registered users)
+      if (data.amount !== undefined && loan.amount !== data.amount) {
+        if (userIdsToNotify.length > 0) {
+          try {
+            await this.notificationService.createNotification({
+              type: NotificationType.BALANCE_UPDATE,
+              message: `Loan amount updated from ${loan.amount} to ${result.amount}`,
+              userIds: userIdsToNotify,
+              payload: {
+                loanId: result.id,
+                oldAmount: loan.amount,
+                newAmount: result.amount,
+                amountDifference: Math.abs(loan.amount - result.amount),
+              },
+              loanId: result.id,
+              groupId: result.groupId,
+            });
+          } catch (error) {
+            this.logger.error(
+              `Failed to create amount update notification: ${error.message}`,
+              {
+                loanId: result.id,
+                userIds: userIdsToNotify,
+              },
+            );
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to update loan: ${error.message}`, {
+        loanId: id,
+        userId,
+        data,
+        stack: error.stack,
+      });
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      if (error.code === 'P2002') {
+        throw new BadRequestException('A unique constraint was violated.');
+      }
+
+      if (error.code === 'P2003') {
+        throw new BadRequestException('A foreign key constraint was violated.');
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to update loan. Please try again later.',
+      );
+    }
+  }
+
+  async transferLoan(
+    id: number,
+    userId: number,
+    newBorrowerId?: number,
+    newPartyEmail?: string,
+  ): Promise<Loan> {
+    const loan = await this.prisma.loan.findUnique({
+      where: { id, isDeleted: false },
+      include: {
+        transactions: true,
+        borrower: true,
+        lender: true,
+      },
     });
+
+    if (!loan) {
+      throw new NotFoundException(`Loan with ID ${id} not found`);
+    }
+
+    if (loan.status === LoanStatus.REPAID) {
+      throw new ForbiddenException(
+        'You can not transfer an already paid loan, please create a new loan',
+      );
+    }
+
+    if (newBorrowerId && newPartyEmail) {
+      throw new ForbiddenException(
+        'Cannot transfer loan to both a registered user and an email simultaneously. Please choose one transfer method.',
+      );
+    }
+
+    // Scenario 1: Transfer to a registered borrower
+    if (newBorrowerId) {
+      // Validate that the current user is the lender
+      if (loan.lenderId !== userId) {
+        throw new UnauthorizedException(
+          'Only the lender can transfer the loan to a registered borrower',
+        );
+      }
+
+      const newBorrower = await this.prisma.user.findUnique({
+        where: { id: newBorrowerId, isDeleted: false },
+      });
+
+      if (!newBorrower) {
+        throw new NotFoundException(`User with ID ${newBorrowerId} not found`);
+      }
+
+      if (loan.borrowerId === newBorrowerId) {
+        throw new BadRequestException(
+          'Loan is already assigned to this borrower',
+        );
+      }
+
+      // Perform the transfer
+      return await this.prisma.$transaction(async (tx) => {
+        // Create transactions for both lender (OUT) and new borrower (IN)
+        const lenderTransaction = this.createLoanTransactionTemplate(
+          loan.amount,
+          loan.description,
+          TransactionDirection.OUT,
+          loan.lenderId,
+          loan.groupId,
+          `Loan given to ${newBorrower.firstName}`,
+        );
+
+        const borrowerTransaction = this.createLoanTransactionTemplate(
+          loan.amount,
+          loan.description,
+          TransactionDirection.IN,
+          newBorrowerId,
+          loan.groupId,
+          `Loan received from ${loan.lender.firstName}`,
+        );
+
+        // Update the loan with new borrower and transactions
+        return await tx.loan.update({
+          where: { id },
+          data: {
+            borrowerId: newBorrowerId,
+            borrowerEmail: null,
+            lenderEmail: null,
+            transactions: {
+              updateMany: {
+                where: { loanId: id, isDeleted: false },
+                data: { isDeleted: true },
+              },
+              create: [lenderTransaction, borrowerTransaction],
+            },
+          },
+          include: {
+            transactions: { where: { isDeleted: false } },
+            lender: true,
+            borrower: true,
+          },
+        });
+      });
+    }
+
+    // Scenario 2: Transfer to an unregistered party via email
+    if (newPartyEmail) {
+      const isAuthorizedUser =
+        loan.lenderId === userId || loan.borrowerId === userId;
+
+      if (!isAuthorizedUser) {
+        throw new UnauthorizedException(
+          'Only the lender or current borrower can transfer the loan',
+        );
+      }
+
+      // Determine if we're updating lender or borrower email
+      const isUserLender = loan.lenderId === userId;
+
+      // Perform the transfer
+      return await this.prisma.$transaction(async (tx) => {
+        // Prepare new transaction for the registered party
+        const newTransaction = this.createLoanTransactionTemplate(
+          loan.amount,
+          loan.description,
+          isUserLender ? TransactionDirection.OUT : TransactionDirection.IN,
+          isUserLender ? loan.lenderId : loan.borrowerId,
+          loan.groupId,
+          isUserLender
+            ? 'Loan with new lender contact'
+            : 'Loan with new borrower contact',
+        );
+
+        // Update the loan with new email and transactions
+        return await tx.loan.update({
+          where: { id },
+          data: {
+            ...(isUserLender
+              ? { lenderEmail: null, borrowerEmail: newPartyEmail }
+              : { lenderEmail: newPartyEmail, borrowerEmail: null }),
+            ...(isUserLender
+              ? { lenderId: userId, borrowerId: null }
+              : { lenderId: null, borrowerId: userId }),
+            transactions: {
+              // Mark existing transactions as deleted
+              updateMany: {
+                where: { loanId: id, isDeleted: false },
+                data: { isDeleted: true },
+              },
+              create: newTransaction,
+            },
+          },
+          include: {
+            transactions: { where: { isDeleted: false } },
+            lender: true,
+            borrower: true,
+          },
+        });
+      });
+    }
+
+    throw new BadRequestException(
+      'Must provide either a new borrower ID or a new party email',
+    );
   }
 
   async deleteLoan(id: number, userId: number) {

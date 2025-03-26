@@ -37,7 +37,9 @@ enum GroupRole {
 enum NotificationType {
   LOAN_CREATED 
   LOAN_REMINDER // cron job
+  LOAN_TRANSFER
   BALANCE_UPDATE 
+  LOAN_STATUS_UPDATE
   OVERDUE_ALERT // cron job
   LOAN_REPAID // cron job
   INVITATION_RECEIVED 

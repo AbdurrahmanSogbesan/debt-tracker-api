@@ -115,10 +115,22 @@ export class LoanController {
     const { id: supabaseUid } = req.user || {};
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    const borrower = await this.loanService.getUserByEmail(
-      loanTransferDto.newBorrowerEmail,
+
+    let borrowerId: number | undefined;
+
+    if (loanTransferDto.newBorrowerEmail) {
+      const borrower = await this.loanService.getUserByEmail(
+        loanTransferDto.newBorrowerEmail,
+      );
+      borrowerId = borrower?.id;
+    }
+
+    return await this.loanService.transferLoan(
+      +id,
+      userId,
+      borrowerId,
+      loanTransferDto.newPartyEmail,
     );
-    return await this.loanService.transferLoan(+id, borrower.id, userId);
   }
 
   @Patch(':id/delete')
