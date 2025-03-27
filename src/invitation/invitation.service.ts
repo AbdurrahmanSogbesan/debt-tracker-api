@@ -119,8 +119,8 @@ export class InvitationService {
     });
 
     const invitationLink = existingUser
-      ? `${process.env.FRONTEND_URL}/login?invitationId=${result.invitation.id}?groupId=${groupId}`
-      : `${process.env.FRONTEND_URL}/signup?invitationId=${result.invitation.id}?groupId=${groupId}`;
+      ? `${process.env.FRONTEND_URL}/login?invitationId=${result.invitation.id}&groupId=${groupId}`
+      : `${process.env.FRONTEND_URL}/signup?invitationId=${result.invitation.id}&groupId=${groupId}`;
 
     try {
       const emailSubject = `You are Invited to Join Our Group: ${group.name}`;
