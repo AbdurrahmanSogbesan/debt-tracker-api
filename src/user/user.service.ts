@@ -84,8 +84,8 @@ export class UserService {
       const userName =
         `${userCreateData.firstName} ${userCreateData.lastName}`.trim();
 
-      // Create the notification directly with the transaction's prisma instance
-      await prisma.notification.create({
+      // Create the notification first
+      const notification = await prisma.notification.create({
         data: {
           type: NotificationType.INVITATION_ACCEPTED,
           message: `${userName} has accepted the invitation to join the group "${invitation.group.name}".`,
@@ -94,12 +94,18 @@ export class UserService {
             groupName: invitation.group.name,
             userId: userId,
           },
-          users: {
-            connect: adminIds.map((id) => ({ id })),
-          },
           group: { connect: { id: invitation.groupId } },
           invite: { connect: { id: invitation.id } },
         },
+      });
+
+      // Create user notification relationships for all admins
+      await prisma.userNotification.createMany({
+        data: adminIds.map((adminId) => ({
+          userId: adminId,
+          notificationId: notification.id,
+          isRead: false,
+        })),
       });
     }
   }
@@ -159,15 +165,20 @@ export class UserService {
     amount: number,
     userCreateData: Prisma.UserCreateInput,
   ) {
-    await prisma.notification.create({
+    const notification = await prisma.notification.create({
       data: {
         type: NotificationType.LOAN_CREATED,
         message: `${userCreateData.firstName} ${userCreateData.lastName} has joined and is now linked to your loan.`,
         payload: { loanId, amount },
-        users: {
-          connect: [{ id: recipientId }],
-        },
         loan: { connect: { id: loanId } },
+      },
+    });
+
+    await prisma.userNotification.create({
+      data: {
+        userId: recipientId,
+        notificationId: notification.id,
+        isRead: false,
       },
     });
   }

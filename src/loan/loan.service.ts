@@ -481,7 +481,6 @@ export class LoanService {
         ? await this.getUserFirstName(loan.borrower.id)
         : loan.borrowerEmail?.split('@')[0] || 'Unknown';
 
-      // Build update data dynamically to avoid undefined fields
       const updateData: any = {};
 
       if (data.amount !== undefined) updateData.amount = data.amount;
