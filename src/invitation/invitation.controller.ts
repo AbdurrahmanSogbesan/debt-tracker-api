@@ -38,13 +38,29 @@ export class InvitationController {
   }
 
   @UseGuards(JwtGuard)
-  @Get('pendingInvitations')
-  async getPendingInvitations(@Request() req) {
+  @Get('pending/user')
+  async getPendingInvitationsForUser(@Request() req) {
     const { id: supabaseUid } = req.user || {};
     const userId =
       await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
 
-    return await this.invitationService.getPendingInvitations(userId);
+    return await this.invitationService.getPendingInvitationsForUser(userId);
+  }
+
+  @UseGuards(JwtGuard)
+  @Get('pending/group')
+  async getPendingInvitationsForGroup(
+    @Request() req,
+    @Body() body: { groupId: number },
+  ) {
+    const { id: supabaseUid } = req.user || {};
+    const userId =
+      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
+
+    return await this.invitationService.getPendingInvitationsForGroup(
+      userId,
+      body.groupId,
+    );
   }
 
   @Get(':invitationId')

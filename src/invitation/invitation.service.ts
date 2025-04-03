@@ -312,10 +312,46 @@ export class InvitationService {
     return invitation;
   }
 
-  async getPendingInvitations(userId: number) {
+  async getPendingInvitationsForUser(userId: number) {
     const invitation = this.prisma.invitation.findMany({
       where: {
         userId,
+        status: InvitationStatus.PENDING,
+        isExpired: false,
+        isDeleted: false,
+      },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('No pending invitations found.');
+    }
+    return invitation;
+  }
+
+  async getPendingInvitationsForGroup(userId: number, groupId: number) {
+    const [group, isAdmin] = await Promise.all([
+      this.membershipService.getGroupWithMembers(
+        groupId,
+        {},
+        { members: { where: { isDeleted: false } } },
+      ),
+      this.membershipService.isGroupMemberAdmin(groupId, userId),
+    ]);
+
+    const member = group.members.find((member) => member.userId === userId);
+    if (!member) {
+      throw new ForbiddenException('You are not a member of this group!');
+    }
+
+    if (!isAdmin) {
+      throw new ForbiddenException(
+        'Only admins can view pending invitations for the group!',
+      );
+    }
+
+    const invitation = this.prisma.invitation.findMany({
+      where: {
+        groupId,
         status: InvitationStatus.PENDING,
         isExpired: false,
         isDeleted: false,
