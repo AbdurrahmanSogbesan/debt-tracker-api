@@ -324,6 +324,7 @@ export class InvitationService {
         isExpired: false,
         isDeleted: false,
       },
+      include: { group: true },
     });
 
     if (!invitation) {
@@ -360,6 +361,7 @@ export class InvitationService {
         isExpired: false,
         isDeleted: false,
       },
+      include: { group: true },
     });
 
     if (!invitation) {
