@@ -74,7 +74,7 @@ model User {
   transactions      Transaction[]      @relation("PaidBy")
   lentLoans         Loan[]             @relation("Lender")
   borrowedLoans     Loan[]             @relation("Borrower")
-  notifications     Notification[]
+  notifications UserNotification[]
   receivedInvitations   Invitation[] @relation("ReceivedInvitations")
   isDeleted         Boolean            @default(false)
 }
@@ -180,11 +180,10 @@ model Notification {
   type      NotificationType
   message   String
   payload   Json?            
-  isRead    Boolean          @default(false)
   isDeleted Boolean          @default(false)
 
+  userNotifications UserNotification[]
   
-  users      User[]           
   group      Group?           @relation(fields: [groupId], references: [id])
   groupId    Int?
   loan       Loan?            @relation(fields: [loanId], references: [id])
@@ -195,6 +194,21 @@ model Notification {
 
   @@index([type])
 }
+
+model UserNotification {
+  user           User         @relation(fields: [userId], references: [id])
+  userId         Int
+  notification   Notification @relation(fields: [notificationId], references: [id])
+  notificationId Int
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@id([userId, notificationId])
+  @@index([userId])
+  @@index([notificationId])
+}
+
+
 
 model Invitation {
   id            Int       @id @default(autoincrement())

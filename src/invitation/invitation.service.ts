@@ -106,11 +106,15 @@ export class InvitationService {
               inviterId,
               invitationId: newInvitation.id,
             },
-            users: {
-              connect: [{ id: existingUser.id }],
-            },
             group: { connect: { id: groupId } },
             invite: { connect: { id: newInvitation.id } },
+          },
+        });
+        await tx.userNotification.create({
+          data: {
+            userId: existingUser.id,
+            notificationId: notification.id,
+            isRead: false,
           },
         });
       }

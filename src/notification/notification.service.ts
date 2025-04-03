@@ -21,27 +21,39 @@ export class NotificationService {
   async createNotification(data: CreateNotificationDto) {
     const { userIds, loanId, groupId, inviteId, payload, ...rest } = data;
 
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         ...rest,
         payload: payload as Prisma.JsonValue,
-        users: {
-          connect: userIds.map((id) => ({ id })),
-        },
         ...(loanId && { loan: { connect: { id: loanId } } }),
         ...(groupId && { group: { connect: { id: groupId } } }),
         ...(inviteId && { invite: { connect: { id: inviteId } } }),
       },
     });
+
+    if (userIds && userIds.length > 0) {
+      await this.prisma.userNotification.createMany({
+        data: userIds.map((userId) => ({
+          userId,
+          notificationId: notification.id,
+        })),
+      });
+    }
+
+    return notification;
   }
 
   async getAllNotifications(userId: number, query: FetchNotificationsDto) {
     const { page, limit, type, isRead, groupId } = query;
 
     const where: Prisma.NotificationWhereInput = {
-      users: { some: { id: userId } },
+      userNotifications: {
+        some: {
+          userId,
+          ...(isRead !== undefined && { isRead }),
+        },
+      },
       ...(type ? { type } : {}),
-      ...(isRead !== undefined && { isRead }),
       ...(groupId ? { groupId } : {}),
       isDeleted: false,
     };
@@ -52,8 +64,17 @@ export class NotificationService {
     const notifications = await this.prisma.notification.findMany({
       where,
       include: {
-        users: {
-          select: { firstName: true, lastName: true, email: true },
+        userNotifications: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
         },
         loan: {
           select: {
@@ -90,8 +111,24 @@ export class NotificationService {
       take: limit,
     });
 
+    const transformedNotifications = notifications.map((notification) => {
+      const isReadForThisUser =
+        notification.userNotifications.find((un) => un.userId === userId)
+          ?.isRead || false;
+
+      // Extract users from userNotifications
+      const users = notification.userNotifications.map((un) => un.user);
+
+      return {
+        ...notification,
+        isRead: isReadForThisUser,
+        users,
+        userNotifications: undefined,
+      };
+    });
+
     return {
-      notifications,
+      notifications: transformedNotifications,
       page,
       limit,
       totalPages,
@@ -103,11 +140,15 @@ export class NotificationService {
     const notification = await this.prisma.notification.findFirst({
       where: {
         id: notificationId,
-        users: { some: { id: userId } },
+        userNotifications: {
+          some: {
+            userId,
+          },
+        },
         isDeleted: false,
       },
       include: {
-        users: true,
+        userNotifications: true,
         loan: true,
         group: true,
         invite: true,
@@ -125,7 +166,7 @@ export class NotificationService {
     const notification = await this.prisma.notification.findFirst({
       where: {
         id: notificationId,
-        users: { some: { id: userId } },
+        userNotifications: { some: { userId } },
         isDeleted: false,
       },
     });
@@ -134,25 +175,38 @@ export class NotificationService {
       throw new NotFoundException('Notification not found');
     }
 
-    return this.prisma.notification.update({
-      where: { id: notificationId },
+    return this.prisma.userNotification.update({
+      where: {
+        userId_notificationId: {
+          userId,
+          notificationId,
+        },
+      },
       data: { isRead: true },
     });
   }
 
   async markAllAsRead(userId: number) {
-    const notification = await this.prisma.notification.findMany({
-      where: { users: { some: { id: userId } }, isDeleted: false },
+    // Check if the user has any notifications
+    const userNotifications = await this.prisma.userNotification.findMany({
+      where: {
+        userId,
+        notification: {
+          isDeleted: false,
+        },
+        isRead: false,
+      },
     });
 
-    if (!notification) {
-      throw new NotFoundException('Notification(s) not found');
+    if (!userNotifications || userNotifications.length === 0) {
+      throw new NotFoundException('No unread notifications found');
     }
 
-    return this.prisma.notification.updateMany({
+    // Mark all notifications as read for this specific user
+    return this.prisma.userNotification.updateMany({
       where: {
-        users: { some: { id: userId } },
-        isDeleted: false,
+        userId,
+        notification: { isDeleted: false },
         isRead: false,
       },
       data: {
@@ -165,7 +219,7 @@ export class NotificationService {
     const notification = await this.prisma.notification.findFirst({
       where: {
         id: notificationId,
-        users: { some: { id: userId } },
+        userNotifications: { some: { userId } },
       },
     });
 
