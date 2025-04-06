@@ -447,6 +447,7 @@ export class UserService {
 
     return await this.prisma.invitation.findMany({
       where: { userId: user },
+      include: { group: true },
     });
   }
 
