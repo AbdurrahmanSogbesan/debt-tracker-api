@@ -2,83 +2,67 @@ import {
   Controller,
   Post,
   Body,
-  Request,
   UseGuards,
-  Get,
   Param,
   Patch,
 } from '@nestjs/common';
-import { JwtGuard } from '../auth/guard';
-import { GroupRole, Prisma } from '@prisma/client';
+import { JwtGuard, RegisteredUserGuard } from '../auth/guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthUser } from '../auth/auth-user';
+import { GroupRole } from '@prisma/client';
 import { MembershipService } from './membership.service';
-import { GroupService } from '../group/group.service';
 
-@UseGuards(JwtGuard)
+@UseGuards(JwtGuard, RegisteredUserGuard)
 @Controller('membership')
 export class MembershipController {
-  constructor(
-    private readonly membershipService: MembershipService,
-    private readonly groupService: GroupService,
-  ) {}
+  constructor(private readonly membershipService: MembershipService) {}
 
   @Post(':groupId/member')
   async addMember(
     @Param('groupId') groupId: number,
-    @Body('userId') userId: number,
-    @Request() req,
+    @Body('user.userId') userId: number,
+    @CurrentUser() user: AuthUser,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const addedByUserId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
     return await this.membershipService.addMember(
       +groupId,
-      userId,
-      addedByUserId,
+      user.userId,
+      user.userId,
     );
   }
 
   @Post(':groupId/leave')
-  async leaveGroup(@Param('groupId') groupId: number, @Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.membershipService.leaveGroup(+groupId, userId);
+  async leaveGroup(
+    @Param('groupId') groupId: number,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return await this.membershipService.leaveGroup(+groupId, user.userId);
   }
 
-  @Patch(':groupId/remove/member/:userId')
+  @Patch(':groupId/remove/member/:user.userId')
   async removeMember(
     @Param('groupId') groupId: number,
-    @Param('userId') userId: number,
-    @Request() req,
+    @Param('user.userId') userId: number,
+    @CurrentUser() user: AuthUser,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const removedByUserId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
     return await this.membershipService.removeMember(
       +groupId,
-      +userId,
-      removedByUserId,
+      +user.userId,
+      user.userId,
     );
   }
 
-  @Patch(':groupId/update/member/:userId')
+  @Patch(':groupId/update/member/:user.userId')
   async updateMemberRole(
     @Param('groupId') groupId: number,
-    @Param('userId') userId: number,
+    @Param('user.userId') userId: number,
     @Body('role') role: GroupRole,
 
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ) {
-    const { id: supabaseUid } = req.user || {};
-
-    const updatedByUserId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
     return await this.membershipService.updateMemberRole(
       +groupId,
-      +userId,
-      updatedByUserId,
+      +user.userId,
+      user.userId,
       role,
     );
   }

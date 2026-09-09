@@ -5,70 +5,67 @@ import {
   Body,
   Patch,
   Param,
-  Delete,
   UseGuards,
-  Request,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { JwtGuard } from '../auth/guard';
+import { JwtGuard, RegisteredUserGuard } from '../auth/guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthUser } from '../auth/auth-user';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { GroupService } from 'src/group/group.service';
 
 @UseGuards(JwtGuard)
 @Controller('user')
 export class UserController {
-  constructor(
-    private readonly userService: UserService,
-    private readonly groupService: GroupService,
-  ) {}
+  constructor(private readonly userService: UserService) {}
 
+  // The only route reachable before the user row exists, so no RegisteredUserGuard.
   @Post()
-  async create(@Body() createUserDto: CreateUserDto, @Request() req) {
-    const { email, id: supabaseUid } = req.user;
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return await this.userService.create({
       ...createUserDto,
       // Trusted claims last: the body must never be able to override identity.
-      email,
-      supabaseUid,
+      email: user.email,
+      supabaseUid: user.supabaseUid,
     });
   }
 
+  @UseGuards(RegisteredUserGuard)
   @Get('me')
-  async findAuthUser(@Request() req) {
-    const { id: supabaseUid } = req.user;
-    return await this.userService.findAuthUser(supabaseUid);
+  async findAuthUser(@CurrentUser() user: AuthUser) {
+    return await this.userService.findAuthUser(user.supabaseUid);
   }
 
+  @UseGuards(RegisteredUserGuard)
   @Get('stats')
-  async getStats(@Request() req) {
-    const { id: supabaseUid } = req.user;
-
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.userService.getUserStats(userId);
+  async getStats(@CurrentUser() user: AuthUser) {
+    return await this.userService.getUserStats(user.userId);
   }
 
+  @UseGuards(RegisteredUserGuard)
   @Get('invitations')
-  async getUserInvitations(@Request() req) {
-    const { id: supabaseUid } = req.user;
-    return await this.userService.getUserInvitations(supabaseUid);
+  async getUserInvitations(@CurrentUser() user: AuthUser) {
+    return await this.userService.getUserInvitations(user.userId);
   }
 
+  @UseGuards(RegisteredUserGuard)
   @Get(':email')
   async findOne(@Param('email') email: string) {
     return await this.userService.findOne(email);
   }
 
+  @UseGuards(RegisteredUserGuard)
   @Patch('me')
-  async update(@Body() data: UpdateUserDto, @Request() req) {
-    const { id: supabaseUid } = req.user;
-    return await this.userService.update(supabaseUid, data);
+  async update(@Body() data: UpdateUserDto, @CurrentUser() user: AuthUser) {
+    return await this.userService.update(user.supabaseUid, data);
   }
 
+  @UseGuards(RegisteredUserGuard)
   @Patch('delete')
-  async delete(@Request() req) {
-    const { id: supabaseUid } = req.user;
-    return await this.userService.delete(supabaseUid);
+  async delete(@CurrentUser() user: AuthUser) {
+    return await this.userService.delete(user.supabaseUid);
   }
 }

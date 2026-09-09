@@ -2,47 +2,38 @@ import {
   Controller,
   Post,
   Body,
-  Request,
   UseGuards,
   Get,
   Param,
   Patch,
   Query,
-  Delete,
   BadRequestException,
 } from '@nestjs/common';
 import { LoanService } from './loan.service';
-import { JwtGuard } from '../auth/guard';
+import { JwtGuard, RegisteredUserGuard } from '../auth/guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthUser } from '../auth/auth-user';
 import { Loan } from '@prisma/client';
 import { LoanCreateInput } from './dto/create-individual-loan.dto';
-import { GroupService } from '../group/group.service';
 import { UpdateIndividualLoanDto } from './dto/update-individual-loan.dto';
 import { LoanTransferDto } from './dto/transfer-loan.dto';
 import {
   CreateSplitLoanRequest,
   UserIdMemberSplit,
-  CreateSplitLoanDto,
 } from './dto/create-split-loan.dto';
 import { UpdateSplitLoanRequest } from './dto/update-split-loan.dto';
 import { GetChildLoansDto } from './dto/get-child-loans.dto';
 
 @Controller('loan')
 export class LoanController {
-  constructor(
-    private readonly loanService: LoanService,
-    private readonly groupService: GroupService,
-  ) {}
+  constructor(private readonly loanService: LoanService) {}
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Post()
   async createIndividualLoan(
     @Body() createLoanDto: LoanCreateInput & { otherPartyEmail?: string },
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<Loan> {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
     let otherPartyId: number | null = null;
     let otherPartyEmail: string | null = null;
 
@@ -80,7 +71,7 @@ export class LoanController {
 
     return await this.loanService.createLoan(
       createLoanDto,
-      userId,
+      user.userId,
       otherPartyId,
       otherPartyEmail,
     );
@@ -98,7 +89,7 @@ export class LoanController {
     return { message: 'Overdue loans processed successfully' };
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Get(':id')
   async getLoanById(
     @Param('id') id: number,
@@ -107,30 +98,23 @@ export class LoanController {
     return await this.loanService.getLoanDetails(+id, type);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Patch(':id')
   async updateIndividualLoan(
     @Param('id') id: number,
     @Body() updateLoanDto: UpdateIndividualLoanDto,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<Loan> {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.loanService.updateLoan(+id, updateLoanDto, userId);
+    return await this.loanService.updateLoan(+id, updateLoanDto, user.userId);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Patch(':id/transfer')
   async transferLoan(
     @Param('id') id: number,
     @Body() loanTransferDto: LoanTransferDto,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<Loan> {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
     let borrowerId: number | undefined;
 
     if (loanTransferDto.newBorrowerEmail) {
@@ -142,33 +126,27 @@ export class LoanController {
 
     return await this.loanService.transferLoan(
       +id,
-      userId,
+      user.userId,
       borrowerId,
       loanTransferDto.newPartyEmail,
     );
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Patch(':id/delete')
   async deleteIndividualLoan(
     @Param('id') id: number,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<Loan> {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.loanService.deleteLoan(+id, userId);
+    return await this.loanService.deleteLoan(+id, user.userId);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Post('splits')
   async createSplitLoan(
     @Body() createSplitLoanDto: CreateSplitLoanRequest,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
-    const { id: supabaseUid } = req.user || {};
-    const creatorId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
     const emails = createSplitLoanDto.memberSplits.map((split) => split.email);
     const userIdsByEmail = await this.loanService.getUserIdsFromEmails(emails);
     const memberSplits: UserIdMemberSplit[] =
@@ -182,21 +160,17 @@ export class LoanController {
         ...createSplitLoanDto,
         memberSplits,
       },
-      creatorId,
+      user.userId,
     );
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Patch(':id/splits')
   async updateSplitLoan(
     @Param('id') id: string,
     @Body() updateSplitLoanDto: UpdateSplitLoanRequest,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<Loan> {
-    const { id: supabaseUid } = req.user || {};
-    const creatorId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
     const emails = updateSplitLoanDto.memberSplits.map((split) => split.email);
     const userIdsByEmail = await this.loanService.getUserIdsFromEmails(emails);
     const memberSplits: UserIdMemberSplit[] =
@@ -212,23 +186,20 @@ export class LoanController {
         ...updateSplitLoanDto,
         memberSplits,
       },
-      creatorId,
+      user.userId,
     );
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Patch(':id/splits/delete')
   async deleteSplitLoan(
     @Param('id') id: number,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<Loan> {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.loanService.deleteSplitLoan(+id, userId);
+    return await this.loanService.deleteSplitLoan(+id, user.userId);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Get(':parentId/child-loans')
   async getChildLoans(
     @Param('parentId') parentId: number,

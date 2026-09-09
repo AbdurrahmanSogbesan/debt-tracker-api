@@ -445,11 +445,9 @@ export class UserService {
     return user;
   }
 
-  async getUserInvitations(supabaseUid: string) {
-    const user = await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
+  async getUserInvitations(userId: number) {
     return await this.prisma.invitation.findMany({
-      where: { userId: user },
+      where: { userId },
       include: { group: true },
     });
   }
