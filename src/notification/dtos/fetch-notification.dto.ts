@@ -1,8 +1,9 @@
 import { IsOptional, IsEnum, IsInt, IsBoolean } from 'class-validator';
 import { NotificationType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
+import { PaginationQueryDto } from '../../pagination/pagination-query.dto';
 
-export class FetchNotificationsDto {
+export class FetchNotificationsDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(NotificationType)
   type?: NotificationType;
@@ -11,16 +12,6 @@ export class FetchNotificationsDto {
   @IsInt()
   @Type(() => Number)
   groupId?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Type(() => Number)
-  page?: number = 1;
-
-  @IsOptional()
-  @IsInt()
-  @Type(() => Number)
-  limit?: number = 10;
 
   @IsOptional()
   @IsBoolean()

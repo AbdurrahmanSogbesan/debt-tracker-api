@@ -44,7 +44,7 @@ export class NotificationService {
   }
 
   async getAllNotifications(userId: number, query: FetchNotificationsDto) {
-    const { page, limit, type, isRead, groupId } = query;
+    const { page, pageSize, type, isRead, groupId } = query;
 
     const where: Prisma.NotificationWhereInput = {
       userNotifications: {
@@ -59,7 +59,7 @@ export class NotificationService {
     };
 
     const totalCount = await this.prisma.notification.count({ where });
-    const totalPages = Math.ceil(totalCount / limit);
+    const totalPages = Math.ceil(totalCount / pageSize);
 
     const notifications = await this.prisma.notification.findMany({
       where,
@@ -107,8 +107,8 @@ export class NotificationService {
         },
       },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
 
     const transformedNotifications = notifications.map((notification) => {
@@ -130,7 +130,7 @@ export class NotificationService {
     return {
       notifications: transformedNotifications,
       page,
-      limit,
+      pageSize,
       totalPages,
       totalCount,
     };

@@ -1,20 +1,8 @@
-import { Type } from 'class-transformer';
-import { IsOptional, IsString, IsInt, Min } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
+import { PaginationQueryDto } from '../../pagination/pagination-query.dto';
 
-export class GetChildLoansDto {
+export class GetChildLoansDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   searchQuery?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Type(() => Number)
-  page: number = 1;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Type(() => Number)
-  pageSize: number = 10;
 }
