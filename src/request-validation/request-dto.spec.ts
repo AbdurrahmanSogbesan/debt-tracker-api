@@ -2,6 +2,10 @@ import { ArgumentMetadata, ValidationPipe } from '@nestjs/common';
 import { CreateUserDto } from '../user/dto/create-user.dto';
 import { UpdateUserDto } from '../user/dto/update-user.dto';
 import { CreateGroupDto } from '../group/dto/create-group.dto';
+import { CreateLoanDto } from '../loan/dto/create-individual-loan.dto';
+import { CreateSplitLoanRequest } from '../loan/dto/create-split-loan.dto';
+import { UpdateIndividualLoanDto } from '../loan/dto/update-individual-loan.dto';
+import { UpdateSplitLoanRequest } from '../loan/dto/update-split-loan.dto';
 import { UpdateGroupDto } from '../group/dto/update-group.dto';
 
 // Regression tests for SEC-03 / SEC-04. These options must match main.ts.
@@ -120,6 +124,71 @@ describe('request DTO validation', () => {
       ],
     ])('rejects %s', async (_label, dto, body) => {
       await expect(accepts(dto, body)).rejects.toThrow();
+    });
+  });
+
+  // A negative amount inverted who owed whom and corrupted every _sum aggregate.
+  // POST /loan accepted amount: -5000 with a 201 until these DTOs existed.
+  describe('rejects non-positive money on every path', () => {
+    const loan = (amount: unknown) => ({
+      amount,
+      description: 'x',
+      direction: 'OUT',
+      otherPartyEmail: 'b@example.com',
+    });
+    const split = (amount: unknown) => ({
+      groupId: 1,
+      description: 'x',
+      memberSplits: [{ email: 'b@example.com', amount }],
+    });
+
+    it.each([[-5000], [0], [-0.01]])(
+      'POST /loan rejects %p',
+      async (amount) => {
+        await expect(accepts(CreateLoanDto, loan(amount))).rejects.toThrow();
+      },
+    );
+
+    it.each([[-30], [0]])('POST /loan/splits rejects %p', async (amount) => {
+      await expect(
+        accepts(CreateSplitLoanRequest, split(amount)),
+      ).rejects.toThrow();
+    });
+
+    it('PATCH /loan/:id rejects a negative amount', async () => {
+      await expect(
+        accepts(UpdateIndividualLoanDto, { amount: -5000 }),
+      ).rejects.toThrow();
+    });
+
+    it('PATCH /loan/:id/splits rejects a negative split', async () => {
+      await expect(
+        accepts(UpdateSplitLoanRequest, {
+          memberSplits: [{ email: 'b@example.com', amount: -9 }],
+        }),
+      ).rejects.toThrow();
+    });
+
+    it.each([['abc'], [1.005], [1e12]])(
+      'rejects malformed amount %p',
+      async (amount) => {
+        await expect(accepts(CreateLoanDto, loan(amount))).rejects.toThrow();
+      },
+    );
+
+    it('still accepts a valid loan', async () => {
+      await expect(accepts(CreateLoanDto, loan(100.5))).resolves.toMatchObject({
+        amount: 100.5,
+      });
+    });
+
+    it('still accepts a backdated due date', async () => {
+      await expect(
+        accepts(CreateLoanDto, {
+          ...loan(12),
+          dueDate: '2020-01-01T00:00:00.000Z',
+        }),
+      ).resolves.toMatchObject({ amount: 12 });
     });
   });
 });

@@ -1,6 +1,5 @@
 import {
   IsOptional,
-  IsNumber,
   IsString,
   IsDate,
   IsBoolean,
@@ -9,18 +8,13 @@ import {
   Min,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { IsMoneyAmount } from './money-amount.decorator';
 
-import {
-  Prisma,
-  TransactionCategory,
-  TransactionDirection,
-  LoanStatus,
-} from '@prisma/client';
+import { LoanStatus } from '@prisma/client';
 
 export class UpdateIndividualLoanDto {
   @IsOptional()
-  @IsNumber()
-  @Type(() => Number)
+  @IsMoneyAmount()
   amount?: number;
 
   @IsOptional()

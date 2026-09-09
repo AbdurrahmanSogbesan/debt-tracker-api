@@ -20,7 +20,7 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { LoanCreateInput } from './dto/create-individual-loan.dto';
+import { CreateLoanDto } from './dto/create-individual-loan.dto';
 import { UpdateIndividualLoanDto } from './dto/update-individual-loan.dto';
 import { CreateSplitLoanDto } from './dto/create-split-loan.dto';
 import { MembershipService } from 'src/membership/membership.service';
@@ -206,7 +206,7 @@ export class LoanService {
   }
 
   async createLoan(
-    data: LoanCreateInput,
+    data: CreateLoanDto,
     userId: number,
     otherPartyId: number | null,
     otherPartyEmail?: string | null,
