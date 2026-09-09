@@ -8,6 +8,7 @@ import {
 import { Group, Prisma, GroupRole, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetGroupMembersDto } from './dto/get-group-members.dto';
+import { groupVisibleTo } from './group-access';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { NotificationService } from 'src/notification/notification.service';
@@ -123,9 +124,9 @@ export class GroupService {
     return groups;
   }
 
-  async findOne(id: number) {
-    const group = await this.prisma.group.findUnique({
-      where: { id, isDeleted: false },
+  async findOne(id: number, userId: number) {
+    const group = await this.prisma.group.findFirst({
+      where: { AND: [{ id, isDeleted: false }, groupVisibleTo(userId)] },
       include: {
         transactions: {
           where: {
@@ -296,14 +297,16 @@ export class GroupService {
     return result;
   }
 
-  async getGroupMembers(groupId: number, dto: GetGroupMembersDto) {
+  async getGroupMembers(
+    groupId: number,
+    userId: number,
+    dto: GetGroupMembersDto,
+  ) {
     const { search, page, pageSize } = dto;
 
-    // Check if the group exists
     const groupExists = await this.prisma.group.findFirst({
       where: {
-        id: groupId,
-        isDeleted: false,
+        AND: [{ id: groupId, isDeleted: false }, groupVisibleTo(userId)],
       },
     });
 
