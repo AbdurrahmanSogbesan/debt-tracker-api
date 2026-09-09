@@ -14,7 +14,7 @@ import { JwtGuard, RegisteredUserGuard } from '../auth/guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthUser } from '../auth/auth-user';
 import { Loan } from '@prisma/client';
-import { LoanCreateInput } from './dto/create-individual-loan.dto';
+import { CreateLoanDto } from './dto/create-individual-loan.dto';
 import { UpdateIndividualLoanDto } from './dto/update-individual-loan.dto';
 import { LoanTransferDto } from './dto/transfer-loan.dto';
 import {
@@ -31,7 +31,7 @@ export class LoanController {
   @UseGuards(JwtGuard, RegisteredUserGuard)
   @Post()
   async createIndividualLoan(
-    @Body() createLoanDto: LoanCreateInput & { otherPartyEmail?: string },
+    @Body() createLoanDto: CreateLoanDto,
     @CurrentUser() user: AuthUser,
   ): Promise<Loan> {
     let otherPartyId: number | null = null;
