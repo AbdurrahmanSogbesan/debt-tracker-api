@@ -15,12 +15,14 @@ export class MailService implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      this.logger.log('Connected to email server');
+      await this.mailerService.verifyAllTransporters();
+      this.logger.log('SMTP transport verified');
     } catch (error) {
-      this.logger.warn(
-        'Unable to connect to email server. Check your SMTP configuration.',
+      // Mail is degradable — log and continue rather than failing boot.
+      this.logger.error(
+        'SMTP verification failed; outbound email will not work',
+        error?.stack,
       );
-      console.log(error);
     }
   }
 
