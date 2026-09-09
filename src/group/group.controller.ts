@@ -11,21 +11,16 @@ import {
 } from '@nestjs/common';
 import { GroupService } from './group.service';
 import { JwtGuard } from '../auth/guard';
-import { Prisma } from '@prisma/client';
 import { GetGroupMembersDto } from './dto/get-group-members.dto';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
 
 @UseGuards(JwtGuard)
 @Controller('group')
 export class GroupController {
   constructor(private readonly groupService: GroupService) {}
   @Post()
-  async create(
-    @Body()
-    data: Omit<Prisma.GroupCreateInput, 'creator'> & {
-      members?: string[];
-    },
-    @Request() req,
-  ) {
+  async create(@Body() data: CreateGroupDto, @Request() req) {
     const { id: supabaseUid } = req.user || {};
     const { members, ...groupData } = data;
 
@@ -63,7 +58,7 @@ export class GroupController {
 
   @Patch(':id')
   async update(
-    @Body() data: Prisma.GroupUpdateInput,
+    @Body() data: UpdateGroupDto,
     @Param('id') id: number,
     @Request() req,
   ) {

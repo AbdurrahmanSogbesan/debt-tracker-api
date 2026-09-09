@@ -8,6 +8,8 @@ import {
 import { Group, Prisma, GroupRole, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetGroupMembersDto } from './dto/get-group-members.dto';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
 import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
@@ -48,7 +50,7 @@ export class GroupService {
   }
 
   async create(
-    data: Omit<Prisma.GroupCreateInput, 'creator' | 'members'> & {
+    data: Omit<CreateGroupDto, 'members'> & {
       creatorId: number;
       memberIds: number[];
     },
@@ -213,7 +215,7 @@ export class GroupService {
     return group;
   }
 
-  async update(id: number, data: Prisma.GroupUpdateInput, userId: number) {
+  async update(id: number, data: UpdateGroupDto, userId: number) {
     const groupMembership = await this.prisma.groupMembership.findUnique({
       where: {
         groupId_userId: {

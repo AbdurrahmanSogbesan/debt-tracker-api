@@ -12,7 +12,15 @@ async function bootstrap() {
         ? new PapertrailLogger()
         : ['error', 'warn', 'log', 'debug'],
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      // Reject unknown keys, so a handler missing a DTO fails loudly.
+      forbidNonWhitelisted: true,
+      forbidUnknownValues: true,
+      transform: true,
+    }),
+  );
 
   const port = process.env.PORT || 3000;
   const { httpAdapter } = app.get(HttpAdapterHost);
