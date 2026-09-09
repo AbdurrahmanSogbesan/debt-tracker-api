@@ -93,9 +93,10 @@ export class LoanController {
   @Get(':id')
   async getLoanById(
     @Param('id') id: number,
+    @CurrentUser() user: AuthUser,
     @Query('type') type: 'single' | 'split' = 'single',
   ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
-    return await this.loanService.getLoanDetails(+id, type);
+    return await this.loanService.getLoanDetails(+id, user.userId, type);
   }
 
   @UseGuards(JwtGuard, RegisteredUserGuard)
@@ -203,12 +204,13 @@ export class LoanController {
   @Get(':parentId/child-loans')
   async getChildLoans(
     @Param('parentId') parentId: number,
+    @CurrentUser() user: AuthUser,
     @Query() dto: GetChildLoansDto,
   ): Promise<{
     childLoans: any[];
     totalAmount: number;
     count: number;
   }> {
-    return this.loanService.getChildLoans(+parentId, dto);
+    return this.loanService.getChildLoans(+parentId, user.userId, dto);
   }
 }

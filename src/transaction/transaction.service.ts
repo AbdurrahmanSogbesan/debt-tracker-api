@@ -9,6 +9,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GetTransactionsDto, LoanFilterType } from './dto/get-transactions.dto';
+import { transactionsVisibleTo } from './transaction-access';
 
 export type TransactionTotal =
   | number
@@ -38,11 +39,13 @@ export class TransactionService {
   ) {
     const totals = await this.prisma.transaction.groupBy({
       where: {
-        ...commonFilters,
-        ...loanFilter,
-        groupId,
-        ...(direction ? { direction } : {}),
-        ...(filterByPayer ? { payerId: userId } : {}),
+        AND: [
+          transactionsVisibleTo(userId, groupId),
+          commonFilters,
+          loanFilter,
+          ...(direction ? [{ direction }] : []),
+          ...(filterByPayer ? [{ payerId: userId }] : []),
+        ],
       },
       by: ['groupId'],
       _sum: {
@@ -289,11 +292,13 @@ export class TransactionService {
 
     let transactions = await this.prisma.transaction.findMany({
       where: {
-        ...commonFilters,
-        ...loanType,
-        ...(groupId ? { groupId } : {}),
-        ...(!groupId || filterByPayer ? { payerId: userId } : {}),
-        ...(direction ? { direction } : {}),
+        AND: [
+          transactionsVisibleTo(userId, groupId),
+          commonFilters,
+          loanType,
+          ...(groupId && filterByPayer ? [{ payerId: userId }] : []),
+          ...(direction ? [{ direction }] : []),
+        ],
       },
       orderBy: { date: 'desc' },
       skip: (page - 1) * pageSize,

@@ -27,6 +27,7 @@ import { MembershipService } from 'src/membership/membership.service';
 import { UpdateSplitLoanDto } from './dto/update-split-loan.dto';
 import { GetChildLoansDto } from './dto/get-child-loans.dto';
 import { NotificationService } from 'src/notification/notification.service';
+import { loanVisibleTo } from './loan-access';
 import { addDays, differenceInDays, endOfDay, startOfDay } from 'date-fns';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
@@ -389,6 +390,7 @@ export class LoanService {
 
   async getLoanDetails(
     id: number,
+    userId: number,
     includeType: 'single' | 'split' = 'single',
   ): Promise<Loan | { parent: Loan; splits: Loan[] }> {
     const userSelect = {
@@ -431,11 +433,8 @@ export class LoanService {
           : undefined,
     };
 
-    const loan = await this.prisma.loan.findUnique({
-      where: {
-        id,
-        isDeleted: false,
-      },
+    const loan = await this.prisma.loan.findFirst({
+      where: { AND: [{ id, isDeleted: false }, loanVisibleTo(userId)] },
       include: baseInclude,
     });
 
@@ -1001,7 +1000,7 @@ export class LoanService {
         }),
     );
 
-    return this.getLoanDetails(parentLoanId, 'split');
+    return this.getLoanDetails(parentLoanId, creatorId, 'split');
   }
 
   async updateSplitLoan(
@@ -1167,7 +1166,11 @@ export class LoanService {
       },
     );
     // 4. Return updated loan with all relations
-    return this.getLoanDetails(updatedParentLoanId, 'split') as Promise<Loan>;
+    return this.getLoanDetails(
+      updatedParentLoanId,
+      creatorId,
+      'split',
+    ) as Promise<Loan>;
   }
 
   async deleteSplitLoan(id: number, userId: number): Promise<Loan> {
@@ -1237,6 +1240,7 @@ export class LoanService {
 
   async getChildLoans(
     parentId: number,
+    userId: number,
     dto: GetChildLoansDto,
   ): Promise<{
     childLoans: Loan[];
@@ -1252,9 +1256,7 @@ export class LoanService {
       email: true,
     };
 
-    const filters: Prisma.LoanWhereInput = {
-      parentId,
-      isDeleted: false,
+    const searchFilter: Prisma.LoanWhereInput = {
       ...(searchQuery
         ? {
             OR: [
@@ -1276,6 +1278,16 @@ export class LoanService {
             ],
           }
         : {}),
+    };
+
+    const filters: Prisma.LoanWhereInput = {
+      AND: [
+        { parentId, isDeleted: false },
+        searchFilter,
+        // Authorize on the parent: a group member may see every split of a
+        // loan they can see, not just the ones they are party to.
+        { parent: loanVisibleTo(userId) },
+      ],
     };
 
     const [childLoans, totalAmount, count] = await Promise.all([

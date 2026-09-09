@@ -39,16 +39,21 @@ export class GroupController {
   }
 
   @Get(':id')
-  async findById(@Param('id') id: number) {
-    return await this.groupService.findOne(+id);
+  async findById(@Param('id') id: number, @CurrentUser() user: AuthUser) {
+    return await this.groupService.findOne(+id, user.userId);
   }
 
   @Get(':id/members')
   async getGroupMembers(
     @Param('id') groupId: number,
+    @CurrentUser() user: AuthUser,
     @Query() query: GetGroupMembersDto,
   ) {
-    return await this.groupService.getGroupMembers(+groupId, query);
+    return await this.groupService.getGroupMembers(
+      +groupId,
+      user.userId,
+      query,
+    );
   }
 
   @Patch(':id')
