@@ -28,16 +28,6 @@ export class GroupService {
     return user?.firstName;
   }
 
-  async getUserIdFromSupabaseUid(supabaseUid: string): Promise<number> {
-    const user = await this.prisma.user.findUnique({
-      where: { supabaseUid },
-    });
-    if (!user || user.isDeleted) {
-      throw new Error('User not found');
-    }
-    return user.id;
-  }
-
   async getUserIdsByEmails(emails: string[]): Promise<number[]> {
     const users = await this.prisma.user.findMany({
       where: {

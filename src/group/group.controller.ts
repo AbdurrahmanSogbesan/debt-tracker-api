@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  Request,
   UseGuards,
   Get,
   Param,
@@ -10,37 +9,33 @@ import {
   Query,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
-import { JwtGuard } from '../auth/guard';
+import { JwtGuard, RegisteredUserGuard } from '../auth/guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthUser } from '../auth/auth-user';
 import { GetGroupMembersDto } from './dto/get-group-members.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 
-@UseGuards(JwtGuard)
+@UseGuards(JwtGuard, RegisteredUserGuard)
 @Controller('group')
 export class GroupController {
   constructor(private readonly groupService: GroupService) {}
-  @Post()
-  async create(@Body() data: CreateGroupDto, @Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const { members, ...groupData } = data;
 
-    const [creatorId, memberIds] = await Promise.all([
-      this.groupService.getUserIdFromSupabaseUid(supabaseUid),
-      this.groupService.getUserIdsByEmails(members || []),
-    ]);
+  @Post()
+  async create(@Body() data: CreateGroupDto, @CurrentUser() user: AuthUser) {
+    const { members, ...groupData } = data;
+    const memberIds = await this.groupService.getUserIdsByEmails(members || []);
 
     return await this.groupService.create({
       ...groupData,
-      creatorId,
+      creatorId: user.userId,
       memberIds,
     });
   }
+
   @Get('my-groups')
-  async findMyGroups(@Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return this.groupService.find(userId);
+  async findMyGroups(@CurrentUser() user: AuthUser) {
+    return this.groupService.find(user.userId);
   }
 
   @Get(':id')
@@ -60,19 +55,13 @@ export class GroupController {
   async update(
     @Body() data: UpdateGroupDto,
     @Param('id') id: number,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.groupService.update(+id, data, userId);
+    return await this.groupService.update(+id, data, user.userId);
   }
 
   @Patch(':id/delete')
-  async delete(@Param('id') id: number, @Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.groupService.delete(+id, userId);
+  async delete(@Param('id') id: number, @CurrentUser() user: AuthUser) {
+    return await this.groupService.delete(+id, user.userId);
   }
 }

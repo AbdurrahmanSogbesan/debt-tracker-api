@@ -1,39 +1,23 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Request,
-  UseGuards,
-  Get,
-  Param,
-  Patch,
-  Query,
-} from '@nestjs/common';
+import { Controller, UseGuards, Get, Query } from '@nestjs/common';
 import { TransactionService, TransactionSummary } from './transaction.service';
-import { JwtGuard } from '../auth/guard';
-import { GroupService } from '../group/group.service';
+import { JwtGuard, RegisteredUserGuard } from '../auth/guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthUser } from '../auth/auth-user';
 import { GetTransactionsDto } from './dto/get-transactions.dto';
-import { Transaction } from '@prisma/client';
 
-@UseGuards(JwtGuard)
+@UseGuards(JwtGuard, RegisteredUserGuard)
 @Controller('transaction')
 export class TransactionController {
-  constructor(
-    private readonly transactionService: TransactionService,
-    private readonly groupService: GroupService,
-  ) {}
+  constructor(private readonly transactionService: TransactionService) {}
 
   @Get()
   async getTransactions(
     @Query() query: GetTransactionsDto,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ): Promise<TransactionSummary> {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
-    const transactionsQuery = { ...query, userId };
-
-    return this.transactionService.getTransactions(transactionsQuery);
+    return this.transactionService.getTransactions({
+      ...query,
+      userId: user.userId,
+    });
   }
 }

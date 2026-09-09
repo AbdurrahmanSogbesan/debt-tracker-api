@@ -1,8 +1,8 @@
 import { ArgumentMetadata, ValidationPipe } from '@nestjs/common';
-import { CreateUserDto } from '../../user/dto/create-user.dto';
-import { UpdateUserDto } from '../../user/dto/update-user.dto';
-import { CreateGroupDto } from '../../group/dto/create-group.dto';
-import { UpdateGroupDto } from '../../group/dto/update-group.dto';
+import { CreateUserDto } from '../user/dto/create-user.dto';
+import { UpdateUserDto } from '../user/dto/update-user.dto';
+import { CreateGroupDto } from '../group/dto/create-group.dto';
+import { UpdateGroupDto } from '../group/dto/update-group.dto';
 
 // Regression tests for SEC-03 / SEC-04. These options must match main.ts.
 const pipe = new ValidationPipe({
@@ -23,17 +23,29 @@ const accepts = (dto: any, body: unknown) => pipe.transform(body, meta(dto));
 describe('request DTO validation', () => {
   describe('rejects the writes SEC-03 allowed', () => {
     it.each([
-      ['nested membership write (group privilege escalation)', UpdateUserDto,
-        { memberships: { create: { groupId: 42, role: 'ADMIN' } } }],
-      ['nested loan write (fabricating another user\'s debt)', UpdateUserDto,
-        { lentLoans: { create: { amount: 999999, borrowerId: 7 } } }],
+      [
+        'nested membership write (group privilege escalation)',
+        UpdateUserDto,
+        { memberships: { create: { groupId: 42, role: 'ADMIN' } } },
+      ],
+      [
+        "nested loan write (fabricating another user's debt)",
+        UpdateUserDto,
+        { lentLoans: { create: { amount: 999999, borrowerId: 7 } } },
+      ],
       ['email override', UpdateUserDto, { email: 'victim@example.com' }],
       ['supabaseUid override', UpdateUserDto, { supabaseUid: 'someone-else' }],
       ['isDeleted override', UpdateUserDto, { isDeleted: false }],
-      ['identity fields on signup', CreateUserDto,
-        { firstName: 'A', email: 'victim@example.com', supabaseUid: 'x' }],
-      ['nested group members write', UpdateGroupDto,
-        { members: { create: { userId: 9, role: 'ADMIN' } } }],
+      [
+        'identity fields on signup',
+        CreateUserDto,
+        { firstName: 'A', email: 'victim@example.com', supabaseUid: 'x' },
+      ],
+      [
+        'nested group members write',
+        UpdateGroupDto,
+        { members: { create: { userId: 9, role: 'ADMIN' } } },
+      ],
       ['group creator takeover', UpdateGroupDto, { creatorId: 99 }],
     ])('%s', async (_label, dto, body) => {
       await expect(accepts(dto, body)).rejects.toThrow();
@@ -88,7 +100,9 @@ describe('request DTO validation', () => {
     });
 
     it('renames a group', async () => {
-      await expect(accepts(UpdateGroupDto, { name: 'Flat 4' })).resolves.toEqual({
+      await expect(
+        accepts(UpdateGroupDto, { name: 'Flat 4' }),
+      ).resolves.toEqual({
         name: 'Flat 4',
       });
     });
@@ -99,7 +113,11 @@ describe('request DTO validation', () => {
       ['over-long firstName', UpdateUserDto, { firstName: 'x'.repeat(200) }],
       ['malformed phone', UpdateUserDto, { phone: 'not-a-phone' }],
       ['empty group name', CreateGroupDto, { name: '' }],
-      ['malformed member email', CreateGroupDto, { name: 'g', members: ['nope'] }],
+      [
+        'malformed member email',
+        CreateGroupDto,
+        { name: 'g', members: ['nope'] },
+      ],
     ])('rejects %s', async (_label, dto, body) => {
       await expect(accepts(dto, body)).rejects.toThrow();
     });

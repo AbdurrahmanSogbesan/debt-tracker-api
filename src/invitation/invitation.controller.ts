@@ -6,59 +6,46 @@ import {
   Patch,
   Post,
   Query,
-  Request,
   UseGuards,
 } from '@nestjs/common';
 import { InvitationService } from './invitation.service';
-import { GroupService } from 'src/group/group.service';
-import { JwtGuard } from 'src/auth/guard';
+import { JwtGuard, RegisteredUserGuard } from 'src/auth/guard';
+import { CurrentUser } from 'src/auth/current-user.decorator';
+import { AuthUser } from 'src/auth/auth-user';
 import { CreateInvitationDto } from './dtos/create-invitation.dto';
 import { GetInvitationQueryDto } from './dtos/get-invitation.dto';
 
 @Controller('invitation')
 export class InvitationController {
-  constructor(
-    private readonly invitationService: InvitationService,
-    private readonly groupService: GroupService,
-  ) {}
+  constructor(private readonly invitationService: InvitationService) {}
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Post()
-  async createInvitation(@Body() data: CreateInvitationDto, @Request() req) {
-    const { id: supabaseUid } = req.user || {};
-
-    const inviterId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
+  async createInvitation(
+    @Body() data: CreateInvitationDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return await this.invitationService.createInvitation(
       +data.groupId,
       data.email,
-      inviterId,
+      user.userId,
     );
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Get('pending')
-  async getPendingInvitationsForUser(@Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
-    return this.invitationService.getPendingInvitationsForUser(userId);
+  async getPendingInvitationsForUser(@CurrentUser() user: AuthUser) {
+    return this.invitationService.getPendingInvitationsForUser(user.userId);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Get(':groupId/pending')
   async getPendingInvitationsForGroup(
-    @Request() req,
+    @CurrentUser() user: AuthUser,
     @Param('groupId') groupId: number,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
     return this.invitationService.getPendingInvitationsForGroup(
-      userId,
+      user.userId,
       +groupId,
     );
   }
@@ -67,7 +54,6 @@ export class InvitationController {
   async getInvitationById(
     @Param('invitationId') invitationId: number,
     @Query() query: GetInvitationQueryDto,
-    @Request() req,
   ) {
     const { groupId } = query;
 
@@ -77,30 +63,27 @@ export class InvitationController {
     );
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Patch(':invitationId/accept')
   async acceptInvitation(
     @Param('invitationId') invitationId: number,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.invitationService.acceptInvitation(+invitationId, userId);
+    return await this.invitationService.acceptInvitation(
+      +invitationId,
+      user.userId,
+    );
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RegisteredUserGuard)
   @Patch(':invitationId/decline')
   async declineInvitation(
     @Param('invitationId') invitationId: number,
-    @Request() req,
+    @CurrentUser() user: AuthUser,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
     return await this.invitationService.declineInvitation(
       +invitationId,
-      userId,
+      user.userId,
     );
   }
 }

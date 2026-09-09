@@ -6,87 +6,70 @@ import {
   Patch,
   Post,
   Query,
-  Request,
   UseGuards,
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
-import { JwtGuard } from 'src/auth/guard';
+import { JwtGuard, RegisteredUserGuard } from 'src/auth/guard';
+import { CurrentUser } from 'src/auth/current-user.decorator';
+import { AuthUser } from 'src/auth/auth-user';
 import { CreateNotificationDto } from './dtos/create-notfication.dto';
-import { GroupService } from 'src/group/group.service';
 import { FetchNotificationsDto } from './dtos/fetch-notification.dto';
 
-@UseGuards(JwtGuard)
+@UseGuards(JwtGuard, RegisteredUserGuard)
 @Controller('notification')
 export class NotificationController {
-  constructor(
-    private readonly notificationService: NotificationService,
-    private readonly groupService: GroupService,
-  ) {}
+  constructor(private readonly notificationService: NotificationService) {}
   @Post()
-  async createNotification(
-    @Body() data: CreateNotificationDto,
-    @Request() req,
-  ) {
+  async createNotification(@Body() data: CreateNotificationDto) {
     return await this.notificationService.createNotification(data);
   }
 
   @Get()
   async getAllNotifications(
-    @Request() req,
+    @CurrentUser() user: AuthUser,
     @Query() query: FetchNotificationsDto,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    return await this.notificationService.getAllNotifications(userId, query);
+    return await this.notificationService.getAllNotifications(
+      user.userId,
+      query,
+    );
   }
 
   @Patch('read-all')
-  async markAllAsRead(@Request() req) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-    await this.notificationService.markAllAsRead(userId);
+  async markAllAsRead(@CurrentUser() user: AuthUser) {
+    await this.notificationService.markAllAsRead(user.userId);
     return { success: true, message: 'All notifications marked as read' };
   }
 
   @Get(':id')
   async getSingleNotification(
-    @Request() req,
+    @CurrentUser() user: AuthUser,
     @Param('id') notificationId: number,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
     return await this.notificationService.getSingleNotification(
-      userId,
+      user.userId,
       +notificationId,
     );
   }
 
   @Patch(':id/read')
-  async markAsRead(@Request() req, @Param('id') notificationId: number) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
+  async markAsRead(
+    @CurrentUser() user: AuthUser,
+    @Param('id') notificationId: number,
+  ) {
     return await this.notificationService.markNotificationAsRead(
-      userId,
+      user.userId,
       +notificationId,
     );
   }
 
   @Patch(':id/delete')
   async deleteNotification(
-    @Request() req,
+    @CurrentUser() user: AuthUser,
     @Param('id') notificationId: number,
   ) {
-    const { id: supabaseUid } = req.user || {};
-    const userId =
-      await this.groupService.getUserIdFromSupabaseUid(supabaseUid);
-
     return await this.notificationService.deleteNotification(
-      userId,
+      user.userId,
       +notificationId,
     );
   }
