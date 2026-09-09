@@ -10,8 +10,9 @@ import {
   Request,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { Prisma } from '@prisma/client';
 import { JwtGuard } from '../auth/guard';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { GroupService } from 'src/group/group.service';
 
 @UseGuards(JwtGuard)
@@ -23,17 +24,13 @@ export class UserController {
   ) {}
 
   @Post()
-  async create(
-    @Body() createUserDto: Prisma.UserCreateInput,
-    @Request() req,
-    @Body('invitationId') invitationId?: number,
-  ) {
-    const { email, id: supabaseUid } = req.user || {};
+  async create(@Body() createUserDto: CreateUserDto, @Request() req) {
+    const { email, id: supabaseUid } = req.user;
     return await this.userService.create({
+      ...createUserDto,
+      // Trusted claims last: the body must never be able to override identity.
       email,
       supabaseUid,
-      ...createUserDto,
-      invitationId,
     });
   }
 
@@ -64,7 +61,7 @@ export class UserController {
   }
 
   @Patch('me')
-  async update(@Body() data: Prisma.UserUpdateInput, @Request() req) {
+  async update(@Body() data: UpdateUserDto, @Request() req) {
     const { id: supabaseUid } = req.user;
     return await this.userService.update(supabaseUid, data);
   }

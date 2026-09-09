@@ -20,6 +20,13 @@ import {
 import { InvitationService } from 'src/invitation/invitation.service';
 import { GroupService } from 'src/group/group.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+
+export type CreateUserInput = Omit<CreateUserDto, 'invitationId'> & {
+  email: string;
+  supabaseUid: string;
+};
 
 @Injectable()
 export class UserService {
@@ -72,7 +79,7 @@ export class UserService {
     prisma: any,
     invitation: any,
     userId: number,
-    userCreateData: Prisma.UserCreateInput,
+    userCreateData: CreateUserInput,
   ) {
     const groupAdmins = invitation.group.members.filter(
       (member) => member.role === GroupRole.ADMIN,
@@ -114,7 +121,7 @@ export class UserService {
     prisma: any,
     user: any,
     invitationId: number,
-    userCreateData: Prisma.UserCreateInput,
+    userCreateData: CreateUserInput,
   ) {
     // Fetch the invitation with necessary group information
     const invitation = await prisma.invitation.findFirst({
@@ -163,7 +170,7 @@ export class UserService {
     recipientId: number,
     loanId: number,
     amount: number,
-    userCreateData: Prisma.UserCreateInput,
+    userCreateData: CreateUserInput,
   ) {
     const notification = await prisma.notification.create({
       data: {
@@ -187,7 +194,7 @@ export class UserService {
     prisma: any,
     loan: any,
     user: any,
-    userCreateData: Prisma.UserCreateInput,
+    userCreateData: CreateUserInput,
   ) {
     await prisma.loan.update({
       where: { id: loan.id },
@@ -228,7 +235,7 @@ export class UserService {
     prisma: any,
     loan: any,
     user: any,
-    userCreateData: Prisma.UserCreateInput,
+    userCreateData: CreateUserInput,
   ) {
     await prisma.loan.update({
       where: { id: loan.id },
@@ -268,7 +275,7 @@ export class UserService {
   private async syncUserLoans(
     prisma: any,
     user: any,
-    userCreateData: Prisma.UserCreateInput,
+    userCreateData: CreateUserInput,
   ) {
     // Find loans where this user is a borrower
     const pendingBorrowerLoans = await prisma.loan.findMany({
@@ -305,11 +312,7 @@ export class UserService {
     ]);
   }
 
-  async create(
-    data: Prisma.UserCreateInput & {
-      invitationId?: number;
-    },
-  ) {
+  async create(data: CreateUserInput & { invitationId?: number }) {
     try {
       const { invitationId, ...userCreateData } = data;
 
@@ -395,7 +398,7 @@ export class UserService {
     return user;
   }
 
-  async update(supabaseUid: string, data: Prisma.UserUpdateInput) {
+  async update(supabaseUid: string, data: UpdateUserDto) {
     const user = await this.prisma.user.update({
       where: { supabaseUid },
       data,
