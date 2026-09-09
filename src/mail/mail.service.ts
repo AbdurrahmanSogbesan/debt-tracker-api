@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SendEmailDto } from './dto/send-email.dto';
+import { SendEmailOptions } from './mail.types';
 import { ISendMailOptions, MailerService } from '@nestjs-modules/mailer';
 import { join } from 'path';
 
@@ -24,7 +24,7 @@ export class MailService implements OnModuleInit {
     }
   }
 
-  async sendEmail(options: SendEmailDto) {
+  async sendEmail(options: SendEmailOptions) {
     try {
       const fromEmail = this.configService.get<string>('MAIL_FROM');
       const fromName = this.configService.get<string>('MAIL_NAME');
@@ -43,11 +43,6 @@ export class MailService implements OnModuleInit {
       } else {
         mailOptions.text = options.textBody;
         mailOptions.html = options.htmlBody;
-      }
-
-      // Add attachments if provided
-      if (options.attachments?.length) {
-        mailOptions.attachments = options.attachments;
       }
 
       const result = await this.mailerService.sendMail(mailOptions);
