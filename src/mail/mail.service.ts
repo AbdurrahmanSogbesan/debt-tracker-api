@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SendEmailDto } from './dto/send-email.dto';
+import { SendEmailOptions } from './mail.types';
 import { ISendMailOptions, MailerService } from '@nestjs-modules/mailer';
 import { join } from 'path';
 
@@ -15,16 +15,18 @@ export class MailService implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      this.logger.log('Connected to email server');
+      await this.mailerService.verifyAllTransporters();
+      this.logger.log('SMTP transport verified');
     } catch (error) {
-      this.logger.warn(
-        'Unable to connect to email server. Check your SMTP configuration.',
+      // Mail is degradable — log and continue rather than failing boot.
+      this.logger.error(
+        'SMTP verification failed; outbound email will not work',
+        error?.stack,
       );
-      console.log(error);
     }
   }
 
-  async sendEmail(options: SendEmailDto) {
+  async sendEmail(options: SendEmailOptions) {
     try {
       const fromEmail = this.configService.get<string>('MAIL_FROM');
       const fromName = this.configService.get<string>('MAIL_NAME');
@@ -43,11 +45,6 @@ export class MailService implements OnModuleInit {
       } else {
         mailOptions.text = options.textBody;
         mailOptions.html = options.htmlBody;
-      }
-
-      // Add attachments if provided
-      if (options.attachments?.length) {
-        mailOptions.attachments = options.attachments;
       }
 
       const result = await this.mailerService.sendMail(mailOptions);
