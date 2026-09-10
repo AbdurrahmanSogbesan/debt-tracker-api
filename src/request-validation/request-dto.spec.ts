@@ -6,6 +6,11 @@ import { CreateLoanDto } from '../loan/dto/create-individual-loan.dto';
 import { CreateSplitLoanRequest } from '../loan/dto/create-split-loan.dto';
 import { UpdateIndividualLoanDto } from '../loan/dto/update-individual-loan.dto';
 import { UpdateSplitLoanRequest } from '../loan/dto/update-split-loan.dto';
+import { GetTransactionsDto } from '../transaction/dto/get-transactions.dto';
+import { GetChildLoansDto } from '../loan/dto/get-child-loans.dto';
+import { GetGroupMembersDto } from '../group/dto/get-group-members.dto';
+import { FetchNotificationsDto } from '../notification/dtos/fetch-notification.dto';
+import { MAX_PAGE_SIZE } from '../pagination/pagination-query.dto';
 import { UpdateGroupDto } from '../group/dto/update-group.dto';
 
 // Regression tests for SEC-03 / SEC-04. These options must match main.ts.
@@ -189,6 +194,50 @@ describe('request DTO validation', () => {
           dueDate: '2020-01-01T00:00:00.000Z',
         }),
       ).resolves.toMatchObject({ amount: 12 });
+    });
+  });
+
+  // ?pageSize=1000000 was a well-formed request that materialized the table.
+  describe('bounds every paginated query', () => {
+    const paginated = [
+      ['GET /transaction', GetTransactionsDto],
+      ['GET /loan/:id/child-loans', GetChildLoansDto],
+      ['GET /group/:id/members', GetGroupMembersDto],
+      ['GET /notification', FetchNotificationsDto],
+    ] as const;
+
+    it.each(paginated)('%s caps pageSize', async (_label, dto) => {
+      await expect(
+        accepts(dto, { pageSize: String(MAX_PAGE_SIZE + 1) }),
+      ).rejects.toThrow();
+      await expect(accepts(dto, { pageSize: '1000000' })).rejects.toThrow();
+    });
+
+    it.each(paginated)(
+      '%s rejects page 0 and negatives',
+      async (_label, dto) => {
+        await expect(accepts(dto, { page: '0' })).rejects.toThrow();
+        await expect(accepts(dto, { page: '-1' })).rejects.toThrow();
+      },
+    );
+
+    it.each(paginated)(
+      '%s accepts the maximum and defaults',
+      async (_label, dto) => {
+        await expect(
+          accepts(dto, { pageSize: String(MAX_PAGE_SIZE) }),
+        ).resolves.toMatchObject({ pageSize: MAX_PAGE_SIZE });
+        await expect(accepts(dto, {})).resolves.toMatchObject({
+          page: 1,
+          pageSize: 10,
+        });
+      },
+    );
+
+    it('GET /notification no longer accepts the old `limit` name', async () => {
+      await expect(
+        accepts(FetchNotificationsDto, { limit: '10' }),
+      ).rejects.toThrow();
     });
   });
 });
