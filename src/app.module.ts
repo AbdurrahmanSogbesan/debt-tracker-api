@@ -48,21 +48,13 @@ import * as path from 'path';
           from: `"No Reply" <${config.get('MAIL_FROM')}>`,
         },
         template: {
-          dir: path.join(process.env.PWD, '/src/templates/layouts'),
+          dir: path.join(__dirname, 'templates/layouts'),
           adapter: new HandlebarsAdapter(undefined, {
             inlineCssEnabled: true,
             // inlineCssOptions: { baseUrl: ' ' },
           }),
           options: {
             strict: true,
-          },
-        },
-        options: {
-          partials: {
-            dir: path.join(process.env.PWD, '/src/templates/partials'),
-            options: {
-              strict: true,
-            },
           },
         },
         preview: false,
