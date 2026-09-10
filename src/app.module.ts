@@ -11,7 +11,7 @@ import { TransactionModule } from './transaction/transaction.module';
 import { LoanModule } from './loan/loan.module';
 import { MailModule } from './mail/mail.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/adapters/handlebars.adapter';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { InvitationModule } from './invitation/invitation.module';
 import { NotificationModule } from './notification/notification.module';
