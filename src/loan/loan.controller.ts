@@ -7,10 +7,13 @@ import {
   Param,
   Patch,
   Query,
+  HttpCode,
+  HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
 import { LoanService } from './loan.service';
-import { JwtGuard, RegisteredUserGuard } from '../auth/guard';
+import { JwtGuard, RegisteredUserGuard, CronSecretGuard } from '../auth/guard';
+import { LoanReminderScheduler } from './loan-reminder.scheduler';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthUser } from '../auth/auth-user';
 import { Loan } from '@prisma/client';
@@ -26,7 +29,10 @@ import { GetChildLoansDto } from './dto/get-child-loans.dto';
 
 @Controller('loan')
 export class LoanController {
-  constructor(private readonly loanService: LoanService) {}
+  constructor(
+    private readonly loanService: LoanService,
+    private readonly scheduler: LoanReminderScheduler,
+  ) {}
 
   @UseGuards(JwtGuard, RegisteredUserGuard)
   @Post()
@@ -77,16 +83,18 @@ export class LoanController {
     );
   }
 
-  @Get('reminders')
+  @Post('jobs/reminders')
+  @UseGuards(CronSecretGuard)
+  @HttpCode(HttpStatus.ACCEPTED)
   async triggerLoanReminders() {
-    await this.loanService.handleLoanReminders();
-    return { message: 'Loan reminders processed successfully' };
+    return this.scheduler.handleLoanReminders();
   }
 
-  @Get('overdue')
+  @Post('jobs/overdue')
+  @UseGuards(CronSecretGuard)
+  @HttpCode(HttpStatus.ACCEPTED)
   async triggerOverdueLoans() {
-    await this.loanService.handleOverdueLoans();
-    return { message: 'Overdue loans processed successfully' };
+    return this.scheduler.handleOverdueLoans();
   }
 
   @UseGuards(JwtGuard, RegisteredUserGuard)
